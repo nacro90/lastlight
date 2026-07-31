@@ -1,0 +1,78 @@
+/**
+ * HUD. Cok minimal olmasi kasitli: surerken ekranda sadece hiz var.
+ * Sinematik moddayken hicbir sey yok, cunku bos ekran varsayilan hal;
+ * arayuz oyuncu dokununca geliyor.
+ *
+ * Kare basina degeri React state'ine yazmiyoruz. Hiz saniyede sekiz kez
+ * ornekleniyor; her karede yazmak her karede reconciliation demek olurdu.
+ */
+
+import { useEffect, useState } from 'react'
+
+import { car, perf, runtime } from '@/sim/state'
+
+const SAMPLE_INTERVAL_MS = 125
+const TITLE_DURATION_MS = 5200
+const FRAME_BUDGET_MS = 16.6
+
+function useSampled<T>(read: () => T, intervalMs = SAMPLE_INTERVAL_MS): T {
+  const [value, setValue] = useState(read)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setValue(read()), intervalMs)
+    return () => window.clearInterval(timer)
+  }, [read, intervalMs])
+
+  return value
+}
+
+function readSnapshot() {
+  return {
+    speedKmh: Math.round(car.speed * 3.6),
+    mode: runtime.mode,
+    fps: Math.round(perf.fps),
+    frameMs: perf.frameMs,
+    drawCalls: perf.drawCalls,
+    triangles: perf.triangles,
+    distanceKm: car.distance / 1000,
+  }
+}
+
+export function Hud(): React.ReactElement {
+  const snapshot = useSampled(readSnapshot)
+  const [titleVisible, setTitleVisible] = useState(true)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTitleVisible(false), TITLE_DURATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  const driving = snapshot.mode === 'driving'
+
+  return (
+    <>
+      <div className="titlecard" data-hidden={!titleVisible || driving} aria-hidden="true">
+        <h1 className="titlecard__name">Lastlight</h1>
+        <p className="titlecard__tagline">an endless evening drive</p>
+      </div>
+
+      <div className="hud" data-hidden={!driving}>
+        <div className="speed">
+          <span className="speed__value">{snapshot.speedKmh}</span>
+          <span className="speed__unit">km/h</span>
+        </div>
+        <div className="controls">
+          <span className="hint">W A S D</span>
+        </div>
+      </div>
+
+      {import.meta.env.DEV ? (
+        <div className="devpanel" data-over-budget={snapshot.frameMs > FRAME_BUDGET_MS}>
+          {`${snapshot.fps} fps   ${snapshot.frameMs.toFixed(1)} ms\n` +
+            `${snapshot.drawCalls} draw   ${(snapshot.triangles / 1000).toFixed(0)}k tri\n` +
+            `${snapshot.distanceKm.toFixed(2)} km   ${snapshot.mode}`}
+        </div>
+      ) : null}
+    </>
+  )
+}
