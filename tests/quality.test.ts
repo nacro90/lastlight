@@ -23,6 +23,16 @@ function fullRun(frameMs: number): number[] {
   return repeat(BENCHMARK.warmupFrames + BENCHMARK.sampleFrames, frameMs)
 }
 
+/** Karar gelene kadar kac kare gectigi; gelmezse null. */
+function framesUntilDecision(frameMs: number, limit = 500): number | null {
+  const benchmark = createBenchmark()
+  for (let frame = 1; frame <= limit; frame++) {
+    benchmark.add(frameMs)
+    if (benchmark.done) return frame
+  }
+  return null
+}
+
 describe('kademe tanimlari', () => {
   it('uc kademe var ve hepsi tanimli', () => {
     expect(QUALITY_TIERS).toHaveLength(3)
@@ -108,7 +118,83 @@ describe('kiyaslama', () => {
   it('isinma kareleri karari etkilemiyor', () => {
     // Ilk kareler shader derlemesi ve doku yuklemesi yuzunden her makinede
     // yavas; onlari saymak her makineyi dusuk kademeye atardi.
-    const benchmark = feed([...repeat(BENCHMARK.warmupFrames, 400), ...repeat(BENCHMARK.sampleFrames, 7)])
+    const benchmark = feed([
+      ...repeat(BENCHMARK.warmupFrames, 400),
+      ...repeat(BENCHMARK.sampleFrames, 7),
+    ])
+    expect(benchmark.tier()).toBe('high')
+  })
+
+  it('yavas makinede karar kare sayisini beklemiyor', () => {
+    // Olculdu ve tasarim hatasi cikti: karar sadece kare sayisina bagli
+    // oldugunda uc kare hizinda yuz yirmi kare kirk saniye suruyor, yani
+    // kademeye en cok ihtiyaci olan makine onu hic alamiyor. Karar artik
+    // gecen sureye de bakiyor.
+    const slowFrame = 360
+    const frames = framesUntilDecision(slowFrame)
+    expect(frames).not.toBeNull()
+    expect(frames!).toBeLessThan(BENCHMARK.warmupFrames + BENCHMARK.sampleFrames)
+    // Toplam sure de makul: birkac saniye, kirk degil.
+    expect(frames! * slowFrame).toBeLessThan(9000)
+  })
+
+  it('hizli makinede tam ornek toplaniyor', () => {
+    // Hizli makinede acele etmek gereksiz: kare basina bir buçuk milisaniye
+    // fark eden bir karar veriyoruz, ornek ne kadar coksa o kadar iyi.
+    const frames = framesUntilDecision(7)
+    expect(frames).toBe(BENCHMARK.warmupFrames + BENCHMARK.sampleFrames)
+  })
+
+  it('karar hicbir zaman birkac ornekle verilmiyor', () => {
+    // Ayri bir asgari ornek sayaci yok; panik esigi onu zaten garanti ediyor.
+    // Esigin altindaki her kare suresinde iki bucuk saniyeye en az on ornek
+    // sigiyor, ve ustundeki sureler panik yoluna gidiyor.
+    const guaranteed = Math.ceil(BENCHMARK.decideAfterMs / BENCHMARK.panicMs)
+    expect(guaranteed).toBeGreaterThanOrEqual(8)
+
+    for (const frameMs of [30, 120, BENCHMARK.panicMs - 10]) {
+      const frames = framesUntilDecision(frameMs)
+      expect(frames).not.toBeNull()
+      expect(frames! - BENCHMARK.warmupFrames).toBeGreaterThanOrEqual(guaranteed)
+    }
+  })
+
+  it('sure esigi ile ornek esigi tutarli', () => {
+    expect(BENCHMARK.decideAfterMs).toBeGreaterThan(0)
+    expect(BENCHMARK.panicFrames).toBeGreaterThan(1)
+    // Panik esigi orta kademe esiginin uzerinde olmak zorunda, yoksa normal
+    // yolla "orta" cikacak bir makineyi panik yolu dusuge atiyor.
+    expect(BENCHMARK.panicMs).toBeGreaterThan(BENCHMARK.mediumMs)
+  })
+
+  it('felaket kare surelerinde beklemeden dusuge iniyor', () => {
+    // Ust uste birkac kare ceyrek saniyeyi asiyorsa makinenin tam kaliteyi
+    // kaldirmadigi belli; ornek toplamaya devam etmek sadece o makineyi daha
+    // uzun sure kotu bir deneyimde tutuyor.
+    const benchmark = createBenchmark()
+    for (let i = 0; i < BENCHMARK.warmupFrames; i++) benchmark.add(8)
+    for (let i = 0; i < BENCHMARK.panicFrames; i++) benchmark.add(400)
+    expect(benchmark.done).toBe(true)
+    expect(benchmark.tier()).toBe('low')
+  })
+
+  it('tek tek yavas kareler panige sokmuyor', () => {
+    // Ust uste olmayan sicramalar cop toplamadir, makine yavas degil.
+    const benchmark = createBenchmark()
+    for (let i = 0; i < BENCHMARK.warmupFrames; i++) benchmark.add(8)
+    for (let i = 0; i < BENCHMARK.panicFrames - 1; i++) benchmark.add(400)
+    expect(benchmark.done).toBe(false)
+    for (let i = 0; i < BENCHMARK.sampleFrames; i++) benchmark.add(7)
+    expect(benchmark.tier()).toBe('high')
+  })
+
+  it('isinma kareleri panige sokmuyor', () => {
+    // Shader derlemesi ilk karelerde yuz milisaniyeleri yiyor; o kareler
+    // hicbir karara girmiyor.
+    const benchmark = createBenchmark()
+    for (let i = 0; i < BENCHMARK.warmupFrames; i++) benchmark.add(700)
+    expect(benchmark.done).toBe(false)
+    for (let i = 0; i < BENCHMARK.sampleFrames; i++) benchmark.add(7)
     expect(benchmark.tier()).toBe('high')
   })
 

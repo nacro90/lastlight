@@ -1,10 +1,39 @@
 /**
- * Arayuz token'lari.
+ * Arayuz token'lari ve yazi tipleri.
+ *
+ * Iki rol, iki gerekce, ikisi de kendi sunucumuzdan ve subset alinmis:
+ * toplam onalti kilobyte.
+ *
+ * Instrument Serif sadece acilis kartinda, tam olarak bir kez. Gerekcesi
+ * editoryal degil sinematik: bu bir film baslik karti. O yuzden subset sadece
+ * "Lastlight" harflerini tasiyor, uc buçuk kilobyte.
+ *
+ * Archivo butun arayuz metni ve rakamlar. Secim sebebi dogrudan konunun
+ * dunyasindan: Archivo Amerikan tabela gotiklerinden turuyor, yani yolun kendi
+ * harf dili. Degisken eksenlerinden genislik atildi ve agirlik 250-600
+ * araligina kisildi; yuz kilobyte olan dosya boylece onuc kilobyteye indi.
  *
  * Arayuzde renk yok: kirik beyaz, dusuk opaklik, yumusak golge. Sahne zaten
  * turuncu; arayuz de turuncu olursa ikisi birbirini yiyor. Notr arayuz sicak
  * sahneyi gucllendiriyor.
  */
+
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/archivo-subset.woff2') format('woff2');
+  /* Degisken agirlik araligi; hiz rakami en ince ucta duruyor. */
+  font-weight: 250 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   --paper: #f5efe6;
@@ -15,8 +44,8 @@
   --hud-faint: rgba(245, 239, 230, 0.34);
   --hud-shadow: 0 1px 12px rgba(12, 8, 22, 0.65);
 
-  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+  --font-ui: 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
 
   --bottom-band: clamp(18px, 3.2vh, 34px);
   --side-gutter: clamp(18px, 3.2vw, 40px);

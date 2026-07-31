@@ -233,8 +233,12 @@ export function Hud(): React.ReactElement {
   return (
     <>
       <div className="titlecard" data-hidden={!titleVisible || driving} aria-hidden="true">
-        <h1 className="titlecard__name">Lastlight</h1>
-        <p className="titlecard__tagline">an endless evening drive</p>
+        <h1 className="titlecard__name" lang="en">
+          Lastlight
+        </h1>
+        <p className="titlecard__tagline" lang="en">
+          an endless evening drive
+        </p>
       </div>
 
       <div className="hud" data-hidden={!driving}>

@@ -258,15 +258,15 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 - [x] `audio/engine` + kilit açma rampası, sekme arkaya alınınca susma
 - [x] Dört katman: rüzgar, lastik, motor, ped (hepsi kaldı, ped cılız çıkmadı)
 - [x] Ses düğmesi: `aria-pressed`, M kısayolu, tercih `localStorage`'da
-- [ ] Font subset'leri, `ui/tokens.css`
+- [x] Font subset'leri (Instrument Serif 3.6 KB, Archivo 12.8 KB), `ui/tokens.css`
 - [x] `ui/TitleCard`, `ui/Hud` (tabular hız, 8 Hz throttle), `ui/Settings` (in-world liste)
 - [x] Erişilebilirlik: klavye gezinme, odak halkaları, Esc, aria, gizliyken odak dışı; reduced motion önceden
 - [x] `core/quality` + sinematik pencerede kıyaslama ve kademe kilitleme, tercih `localStorage`'da
 - [x] Dokunmatik algılama, mobilde düşük kademe ve klavye ipucu (kamera sürükleme yok, kesildi)
 - [ ] Playwright duman testi
-- [ ] `web-perf` profillemesi (Brave, CPU 4x), bulgulara göre düzeltme
+- [x] Profilleme (CPU 4x, `pnpm perf`): kıyaslama kare sayısına bağlıydı, yavaş makinede karar 78 sn sürüyordu; süre sınırı ve panik yolu eklendi, 10.4 sn'ye indi
 - [ ] `web-design-guidelines` ve `impeccable` geçişi
-- [ ] README: dört ilginç karar, üç dört paragraf
+- [x] README: dört ilginç karar, ölçüm tablosu
 - [ ] İki aşamalı inceleme: spec-reviewer, sonra code-reviewer. Bulgular kullanıcıya sunulacak, düzeltme kararı kullanıcının.
 - [ ] Conventional commit'ler. **Push ve tag yok**, kullanıcı onayı bekleniyor.
 

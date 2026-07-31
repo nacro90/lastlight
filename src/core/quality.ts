@@ -58,11 +58,34 @@ export const QUALITY: Record<QualityTier, QualitySettings> = {
 export const BENCHMARK = {
   /**
    * Ilk kareler her makinede yavas: shader derlemesi, tampon ayirma, ilk
-   * dilimler. Bunlari saymak her makineyi dusuk kademeye atardi.
+   * dilimler. Bunlari saymak her makineyi dusuk kademeye atardi. Sayi kucuk
+   * tutuluyor cunku isinma birkac kare suruyor, ve yavas makinede her kare
+   * ucyuz milisaniye demek.
    */
-  warmupFrames: 30,
-  /** Karar bu kadar kare toplandiktan sonra veriliyor (60 Hz'te ~1.5 saniye). */
+  warmupFrames: 4,
+  /** Hedef ornek sayisi (60 Hz'te ~1.5 saniye). */
   sampleFrames: 90,
+  /**
+   * Ornekleme bu kadar surdukten sonra elde olanla karar veriliyor.
+   *
+   * Sadece kare sayisina bakmak olculdu ve tasarim hatasi cikti: uc kare
+   * hizinda yuz yirmi kare kirk saniye suruyor, yani kademeye en cok ihtiyaci
+   * olan makine karari hic almiyor. Yavas makinede az ornekle karar vermek
+   * sorun degil, cunku o makinede sonuc zaten belli.
+   */
+  decideAfterMs: 2500,
+  /**
+   * Felaket kare suresi. Ust uste bu kadar kare bu esigi asiyorsa makinenin tam
+   * kaliteyi kaldirmadigi bellidir ve ornek toplamaya devam etmek o makineyi
+   * sadece daha uzun sure kotu bir deneyimde tutuyor.
+   *
+   * Olculdu: yazilim rasterizer'da kare suresi saniyelere cikiyor ve normal yol
+   * (asgari sekiz ornek) karari yetmis saniyeye tasiyor. Esik orta kademe
+   * esiginin cok uzerinde, yani normal yolla "orta" cikacak bir makine buraya
+   * dusmuyor.
+   */
+  panicMs: 250,
+  panicFrames: 4,
   /** Ortanca kare suresi bunun altindaysa en yuksek kademe. */
   highMs: 13,
   /** Ortanca kare suresi bunun altindaysa orta kademe, ustundeyse en dusuk. */
@@ -102,6 +125,8 @@ function median(values: number[]): number {
 export function createBenchmark(): Benchmark {
   const samples: number[] = []
   let warmup = 0
+  let elapsedMs = 0
+  let panicRun = 0
   let decided: QualityTier | null = null
 
   return {
@@ -111,8 +136,26 @@ export function createBenchmark(): Benchmark {
         warmup++
         return
       }
+
       samples.push(frameMs)
-      if (samples.length >= BENCHMARK.sampleFrames) {
+      // Gecen sure kare surelerinin toplami; ayri bir saat gerekmiyor ve
+      // fonksiyon saf kaliyor.
+      elapsedMs += frameMs
+
+      // Panik yolu isinmadan sonra basliyor: shader derlemesi ilk karelerde
+      // yuz milisaniyeleri yiyor ve o kareler hicbir karara girmiyor.
+      panicRun = frameMs >= BENCHMARK.panicMs ? panicRun + 1 : 0
+      if (panicRun >= BENCHMARK.panicFrames) {
+        decided = 'low'
+        return
+      }
+
+      // Asgari ornek sayisi diye ayri bir sayac yok, cunku panik esigi onu
+      // zaten garanti ediyor: esigin altindaki her kare suresinde iki bucuk
+      // saniyeye en az on ornek sigiyor.
+      const enough = samples.length >= BENCHMARK.sampleFrames
+      const timedOut = elapsedMs >= BENCHMARK.decideAfterMs
+      if (enough || timedOut) {
         decided = tierForFrameTime(median(samples))
       }
     },
