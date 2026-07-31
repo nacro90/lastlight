@@ -18,6 +18,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import { skyColorAt } from '@/core/sky'
+import { useQuality } from '@/sim/quality'
 import { car } from '@/sim/state'
 import { SkyDome } from './SkyDome'
 
@@ -56,6 +57,7 @@ const LIGHT_DISTANCE = 200
 const SHADOW_EXTENT = 105
 
 export function Atmosphere(): React.ReactElement {
+  const quality = useQuality()
   const light = useRef<THREE.DirectionalLight>(null)
   const { scene, camera } = useThree()
   const viewDirection = useRef(new THREE.Vector3())
@@ -106,8 +108,11 @@ export function Atmosphere(): React.ReactElement {
         color={SUN_COLOR}
         intensity={2.8}
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        // Kademe degisince isik yeniden monte ediliyor: shadow.mapSize sonradan
+        // degistirilince mevcut golge haritasi yeniden olusturulmuyor.
+        key={quality.shadowMapSize}
+        shadow-mapSize-width={quality.shadowMapSize}
+        shadow-mapSize-height={quality.shadowMapSize}
         shadow-camera-left={-SHADOW_EXTENT}
         shadow-camera-right={SHADOW_EXTENT}
         shadow-camera-top={SHADOW_EXTENT}

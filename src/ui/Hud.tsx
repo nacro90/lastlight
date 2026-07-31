@@ -1,20 +1,41 @@
 /**
  * HUD. Cok minimal olmasi kasitli: surerken ekranda sadece hiz var.
- * Sinematik moddayken hicbir sey yok, cunku bos ekran varsayilan hal;
- * arayuz oyuncu dokununca geliyor.
  *
  * Kare basina degeri React state'ine yazmiyoruz. Hiz saniyede sekiz kez
  * ornekleniyor; her karede yazmak her karede reconciliation demek olurdu.
+ *
+ * Kontrol kumesi (ses, ayarlar) sinematik modda gizli ama olu degil: fare
+ * kimildandiginda, tusa basildiginda veya ekrana dokunuldugunda geliyor, birkac
+ * saniye sonra cekiliyor. Sebebi bir zorunluluk: dokunmatik cihazda deneyim hep
+ * sinematik modda kaliyor, yani kume hic gorunmezse o cihazda sesi kapatmak
+ * veya kaliteyi degistirmek imkansiz olurdu. Kullanici niyetiyle gelen bir
+ * kume, dikkat cekmek icin nabiz atan bir oge ile ayni sey degil.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { setSoundEnabled, soundEnabled, subscribeSound } from '@/audio/preference'
-import { car, perf, runtime } from '@/sim/state'
+import { QUALITY_TIERS, type QualityTier } from '@/core/quality'
+import {
+  measuredTier,
+  setQualityChoice,
+  touchOnly,
+  useQualityChoice,
+  type QualityChoice,
+} from '@/sim/quality'
+import { SEED_NAME, car, perf, runtime } from '@/sim/state'
 
 const SAMPLE_INTERVAL_MS = 125
 const TITLE_DURATION_MS = 5200
 const FRAME_BUDGET_MS = 16.6
+/** Kontrol kumesi son etkilesimden bu kadar sonra cekiliyor. */
+const CONTROL_LINGER_MS = 3500
+
+const TIER_LABELS: Record<QualityTier, string> = {
+  low: 'düşük',
+  medium: 'orta',
+  high: 'yüksek',
+}
 
 function useSampled<T>(read: () => T, intervalMs = SAMPLE_INTERVAL_MS): T {
   const [value, setValue] = useState(read)
@@ -27,12 +48,50 @@ function useSampled<T>(read: () => T, intervalMs = SAMPLE_INTERVAL_MS): T {
   return value
 }
 
+/** Son etkilesimden beri gecen sure esigin altinda mi. */
+function useRecentActivity(): boolean {
+  const [active, setActive] = useState(true)
+
+  useEffect(() => {
+    let timer = 0
+
+    const wake = (): void => {
+      setActive(true)
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => setActive(false), CONTROL_LINGER_MS)
+    }
+
+    wake()
+    window.addEventListener('pointermove', wake)
+    window.addEventListener('pointerdown', wake)
+    window.addEventListener('keydown', wake)
+
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pointermove', wake)
+      window.removeEventListener('pointerdown', wake)
+      window.removeEventListener('keydown', wake)
+    }
+  }, [])
+
+  return active
+}
+
+function readSnapshot() {
+  return {
+    speedKmh: Math.round(car.speed * 3.6),
+    mode: runtime.mode,
+    fps: Math.round(perf.fps),
+    frameMs: perf.frameMs,
+    drawCalls: perf.drawCalls,
+    triangles: perf.triangles,
+    distanceKm: car.distance / 1000,
+  }
+}
+
 /**
- * Ses dugmesi. Alt bandin sag ucunda, sabit; nabız atan veya parlayan hicbir
- * sey yok. Fark edilmesi gereken sey yerlesimle cozuluyor.
- *
- * M tusu da ayni tercihi degistiriyor: klavyeyle surerken fareye gitmek
- * akisi bozuyor.
+ * Ses dugmesi. Sabit duruyor; nabiz atan veya parlayan hicbir sey yok. M tusu
+ * da ayni tercihi degistiriyor: klavyeyle surerken fareye gitmek akisi bozuyor.
  */
 function SoundToggle(): React.ReactElement {
   const [enabled, setEnabled] = useState(soundEnabled)
@@ -55,7 +114,7 @@ function SoundToggle(): React.ReactElement {
       className="toggle"
       onClick={toggle}
       aria-pressed={enabled}
-      aria-label={enabled ? 'Sesi kapat' : 'Sesi ac'}
+      aria-label={enabled ? 'Sesi kapat' : 'Sesi aç'}
       data-off={!enabled}
     >
       ses
@@ -63,28 +122,113 @@ function SoundToggle(): React.ReactElement {
   )
 }
 
-function readSnapshot() {
-  return {
-    speedKmh: Math.round(car.speed * 3.6),
-    mode: runtime.mode,
-    fps: Math.round(perf.fps),
-    frameMs: perf.frameMs,
-    drawCalls: perf.drawCalls,
-    triangles: perf.triangles,
-    distanceKm: car.distance / 1000,
-  }
+const CHOICES: QualityChoice[] = ['auto', ...QUALITY_TIERS]
+
+function choiceLabel(choice: QualityChoice): string {
+  return choice === 'auto' ? 'otomatik' : TIER_LABELS[choice]
+}
+
+/**
+ * Ayarlar. Modal degil: dunya arkada akmaya devam ederken alt bantta bir liste
+ * aciliyor. Hem daha ucuz hem daha az kesintili, deneyim hic durmuyor.
+ */
+function Settings({
+  distanceKm,
+  onClose,
+}: {
+  distanceKm: number
+  onClose: () => void
+}): React.ReactElement {
+  const choice = useQualityChoice()
+  const measured = measuredTier()
+  const first = useRef<HTMLButtonElement>(null)
+
+  // Acilirken odak icine giriyor, yoksa klavyeyle gezen biri paneli hic
+  // bulamiyor.
+  useEffect(() => first.current?.focus(), [])
+
+  return (
+    <div className="settings" role="group" aria-label="Ayarlar">
+      <div className="settings__row">
+        <span className="settings__label">Kalite</span>
+        <span className="settings__value">
+          {CHOICES.map((option, index) => (
+            <button
+              key={option}
+              ref={index === 0 ? first : undefined}
+              type="button"
+              className="chip"
+              aria-pressed={choice === option}
+              onClick={() => setQualityChoice(option)}
+            >
+              {choiceLabel(option)}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      {choice === 'auto' ? (
+        <div className="settings__row">
+          <span className="settings__label">Ölçülen</span>
+          <span className="settings__value settings__value--plain">
+            {measured ? TIER_LABELS[measured] : touchOnly ? 'dokunmatik, düşük' : 'ölçülüyor'}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="settings__row">
+        <span className="settings__label">Mesafe</span>
+        <span className="settings__value settings__value--plain settings__value--num">
+          {distanceKm.toFixed(1)} km
+        </span>
+      </div>
+
+      <div className="settings__row">
+        <span className="settings__label">Tohum</span>
+        <span className="settings__value settings__value--plain">{SEED_NAME}</span>
+      </div>
+
+      <div className="settings__row">
+        <span className="settings__label">Kapat</span>
+        <span className="settings__value">
+          <button type="button" className="chip" onClick={onClose}>
+            esc
+          </button>
+        </span>
+      </div>
+    </div>
+  )
 }
 
 export function Hud(): React.ReactElement {
   const snapshot = useSampled(readSnapshot)
   const [titleVisible, setTitleVisible] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsButton = useRef<HTMLButtonElement>(null)
+  const active = useRecentActivity()
 
   useEffect(() => {
     const timer = window.setTimeout(() => setTitleVisible(false), TITLE_DURATION_MS)
     return () => window.clearTimeout(timer)
   }, [])
 
+  const close = useCallback(() => {
+    setSettingsOpen(false)
+    // Odak geldigi yere donuyor, yoksa sekme sirasi sayfa basina atliyor.
+    settingsButton.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen, close])
+
   const driving = snapshot.mode === 'driving'
+  const controlsVisible = driving || active || settingsOpen
 
   return (
     <>
@@ -98,9 +242,25 @@ export function Hud(): React.ReactElement {
           <span className="speed__value">{snapshot.speedKmh}</span>
           <span className="speed__unit">km/h</span>
         </div>
+      </div>
+
+      <div className="cluster" data-hidden={!controlsVisible}>
+        {settingsOpen ? <Settings distanceKm={snapshot.distanceKm} onClose={close} /> : null}
+
         <div className="controls">
-          <span className="hint">W A S D</span>
+          <span className="hint">
+            {touchOnly ? 'klavyeli bir cihazda sürebilirsin' : 'W A S D'}
+          </span>
           <SoundToggle />
+          <button
+            ref={settingsButton}
+            type="button"
+            className="toggle"
+            aria-expanded={settingsOpen}
+            onClick={() => (settingsOpen ? close() : setSettingsOpen(true))}
+          >
+            ayarlar
+          </button>
         </div>
       </div>
 

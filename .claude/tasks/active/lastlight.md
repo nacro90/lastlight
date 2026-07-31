@@ -259,10 +259,10 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 - [x] Dört katman: rüzgar, lastik, motor, ped (hepsi kaldı, ped cılız çıkmadı)
 - [x] Ses düğmesi: `aria-pressed`, M kısayolu, tercih `localStorage`'da
 - [ ] Font subset'leri, `ui/tokens.css`
-- [ ] `ui/TitleCard`, `ui/Hud` (tabular hız, 8 Hz throttle), `ui/Settings` (in-world liste)
-- [ ] Erişilebilirlik geçişi: reduced motion, klavye gezinme, odak halkaları, aria, kontrast
-- [ ] `core/quality` + sinematik pencerede kıyaslama ve kademe kilitleme
-- [ ] Mobil sinematik mod, dokunmatik algılama, düşük kademe
+- [x] `ui/TitleCard`, `ui/Hud` (tabular hız, 8 Hz throttle), `ui/Settings` (in-world liste)
+- [x] Erişilebilirlik: klavye gezinme, odak halkaları, Esc, aria, gizliyken odak dışı; reduced motion önceden
+- [x] `core/quality` + sinematik pencerede kıyaslama ve kademe kilitleme, tercih `localStorage`'da
+- [x] Dokunmatik algılama, mobilde düşük kademe ve klavye ipucu (kamera sürükleme yok, kesildi)
 - [ ] Playwright duman testi
 - [ ] `web-perf` profillemesi (Brave, CPU 4x), bulgulara göre düzeltme
 - [ ] `web-design-guidelines` ve `impeccable` geçişi

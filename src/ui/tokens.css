@@ -51,13 +51,112 @@ canvas {
    cunku bakilan yer orasi. */
 .hud {
   position: fixed;
-  inset: auto 0 0 0;
+  inset: auto auto 0 0;
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
   padding: 0 var(--side-gutter) var(--bottom-band);
   pointer-events: none;
   user-select: none;
+}
+
+/* Kontrol kumesi: hiz ile ayni bantta ama karsi ucta. Ayri kapsayici olmasinin
+   sebebi ikisinin ayri gorunurluk kurallari olmasi; hiz sadece surerken,
+   kontroller kullanici niyetiyle. */
+.cluster {
+  position: fixed;
+  inset: auto 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.85rem;
+  padding: 0 var(--side-gutter) var(--bottom-band);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 700ms ease;
+}
+
+.cluster[data-hidden='true'] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 700ms ease,
+    visibility 0s linear 700ms;
+}
+
+/* Ayarlar modal degil: arkasinda perde yok, dunya akmaya devam ediyor. Ince
+   bir ayirici ve hafif bir koyulastirma okunurlugu tasiyor. */
+.settings {
+  display: grid;
+  gap: 0.55rem;
+  min-width: min(19rem, 76vw);
+  padding: 0.85rem 0 0.1rem;
+  border-top: 1px solid rgba(245, 239, 230, 0.14);
+  pointer-events: auto;
+  text-shadow: var(--hud-shadow);
+}
+
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+}
+
+.settings__label {
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-faint);
+}
+
+.settings__value {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.settings__value--plain {
+  font-size: 0.78rem;
+  color: var(--hud-muted);
+}
+
+.settings__value--num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Secim dugmeleri de metin gibi: cerceve yok, secili olan tam opaklikta ve
+   altinda ince bir cizgi var. Renkle isaretlemek arayuzu sahneyle
+   yaristirirdi. */
+.chip {
+  appearance: none;
+  margin: 0;
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--hud-faint);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 200ms ease;
+}
+
+.chip:hover {
+  color: var(--hud-strong);
+}
+
+.chip[aria-pressed='true'] {
+  color: var(--hud-strong);
+  border-bottom-color: rgba(245, 239, 230, 0.55);
+}
+
+.chip:focus-visible,
+.toggle:focus-visible {
+  outline: 1px solid var(--hud-strong);
+  outline-offset: 5px;
 }
 
 /* Gizliyken klavyeyle de ulasilmiyor: gorunmeyen bir dugmenin odak sirasinda
@@ -146,11 +245,6 @@ canvas {
   text-decoration-thickness: 1px;
 }
 
-.toggle:focus-visible {
-  outline: 1px solid var(--hud-strong);
-  outline-offset: 5px;
-}
-
 .titlecard {
   position: fixed;
   inset: 0;
@@ -210,7 +304,10 @@ canvas {
 
 @media (prefers-reduced-motion: reduce) {
   .hud,
-  .titlecard {
+  .cluster,
+  .titlecard,
+  .toggle,
+  .chip {
     transition-duration: 1ms;
   }
 }

@@ -28,6 +28,7 @@ import * as THREE from 'three'
 import { DUST, DUST_STRIDE, createDustField, wrapCoordinate } from '@/core/dust'
 import { clamp01, smoothstep } from '@/core/math'
 import { SKY } from '@/core/sky'
+import { activeQuality } from '@/sim/quality'
 import { SEED, car } from '@/sim/state'
 
 /** Ruzgar hizi (m/s). Cok yavas: toz suruklenir, ucusmaz. */
@@ -81,6 +82,15 @@ export function Dust(): React.ReactElement {
 
     elapsed.current += delta
 
+    /**
+     * Dusuk kademede zerre sayisi kirpiliyor. Havuz tam boyutta ayrilıyor ama
+     * instanced mesh'in count'u dusuruluyor: boylece hem vertex hem raster isi
+     * gercekten azalıyor, sifir olcekli ornek gizlemek ise sadece rasteri
+     * kurtarirdi.
+     */
+    const active = Math.max(1, Math.round(DUST.count * activeQuality().dustScale))
+    if (instances.count !== active) instances.count = active
+
     const forwardX = Math.cos(car.heading)
     const forwardZ = Math.sin(car.heading)
 
@@ -96,7 +106,7 @@ export function Dust(): React.ReactElement {
     const halfHeight = DUST.boxHeight * 0.5
     const halfWidth = DUST.boxWidth * 0.5
 
-    for (let i = 0; i < DUST.count; i++) {
+    for (let i = 0; i < active; i++) {
       const source = i * DUST_STRIDE
 
       const x = wrapCoordinate(field[source]! + driftX, centerX, DUST.boxLength)

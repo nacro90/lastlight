@@ -23,11 +23,27 @@ export interface InputSource {
   dispose(): void
 }
 
+/**
+ * Bosluk tusu hem freni hem odaklanmis bir dugmeyi tetikliyor. Odak arayuzdeyse
+ * dugme kazaniyor: preventDefault cagirmak dugme aktivasyonunu iptal ediyor ve
+ * klavyeyle gezen biri hicbir ayari acamiyor.
+ *
+ * Sadece Bosluk icin geciyoruz, butun tuslar icin degil: fareyle bir dugmeye
+ * tikladiktan sonra odak dugmede kaliyor, ve o durumda WASD ile surmenin
+ * kesilmesi kabul edilemez.
+ */
+function belongsToInterface(event: KeyboardEvent): boolean {
+  if (event.code !== 'Space') return false
+  const target = event.target
+  return target instanceof HTMLElement && target !== document.body
+}
+
 export function createKeyboardSource(): InputSource {
   const pressed = new Set<string>()
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (!WATCHED.has(event.code)) return
+    if (belongsToInterface(event)) return
     // Ok tuslari sayfayi kaydirmasin.
     event.preventDefault()
     pressed.add(event.code)

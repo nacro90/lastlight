@@ -18,6 +18,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { SCATTER, SLICE } from '@/core/config'
 import { createSliceManager } from '@/core/sliceManager'
 import { SCATTER_STRIDE, createSliceScatter, writeSliceScatter } from '@/core/scatter'
+import { activeQuality } from '@/sim/quality'
 import { SEED, car } from '@/sim/state'
 
 const TRUNK_COLOR = '#2a2018'
@@ -133,6 +134,14 @@ export function Scatter(): React.ReactElement {
     const assignments = manager.update(car.s, budget)
     if (assignments.length === 0) return
 
+    /**
+     * Dusuk kademede dilim basina nesne sayisi kirpiliyor. Yuva indeksi
+     * (dilimYuvasi * adet + i) formuluyle sabit oldugu icin havuz kuculmuyor;
+     * kirpilan kuyruk sifir olcekle saklaniyor. Kazanc raster tarafinda ve
+     * yaprak nesnelerinde masraf tam olarak orada.
+     */
+    const density = activeQuality().scatterScale
+
     for (const { slot, sliceIndex } of assignments) {
       writeSliceScatter(SEED, sliceIndex, scatter)
 
@@ -141,6 +150,7 @@ export function Scatter(): React.ReactElement {
         if (!mesh) continue
 
         const count = KIND_COUNTS[kind]
+        const visible = Math.max(1, Math.round(count * density))
         const buffer = scatter[kind]
         const base = slot * count
 
@@ -148,7 +158,7 @@ export function Scatter(): React.ReactElement {
           const offset = i * SCATTER_STRIDE
           dummy.position.set(buffer[offset]!, buffer[offset + 1]!, buffer[offset + 2]!)
           dummy.rotation.set(0, buffer[offset + 4]!, 0)
-          dummy.scale.setScalar(buffer[offset + 3]!)
+          dummy.scale.setScalar(i < visible ? buffer[offset + 3]! : 0)
           dummy.updateMatrix()
           mesh.setMatrixAt(base + i, dummy.matrix)
         }

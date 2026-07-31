@@ -11,19 +11,14 @@ import { DebugBridge } from '@/scene/DebugBridge'
 import { ChaseCamera } from '@/scene/ChaseCamera'
 import { Effects } from '@/scene/Effects'
 import { PerfProbe } from '@/scene/PerfProbe'
+import { QualityProbe } from '@/scene/QualityProbe'
 import { Scatter } from '@/scene/Scatter'
 import { World } from '@/scene/World'
 import { terrainHeightAtWorld } from '@/core/terrain'
 import { Simulation } from '@/sim/Simulation'
+import { activeQuality, activeTier, measuredTier, qualityChoice, useQuality } from '@/sim/quality'
 import { SEED, car, perf, runtime } from '@/sim/state'
 import { Hud } from '@/ui/Hud'
-
-/**
- * Piksel orani siniri. Yuksek yogunluklu ekranlarda devicePixelRatio 2 veya 3
- * olabiliyor, bu da dort dokuz kat piksel demek: en buyuk tek performans kolu
- * budur. Gorsel farki zar zor gorunur, kazanc ikiye katlanma seviyesinde.
- */
-const MAX_DPR = 1.5
 
 function Scene(): React.ReactElement {
   return (
@@ -40,6 +35,7 @@ function Scene(): React.ReactElement {
       <ChaseCamera />
       <Sound />
       <PerfProbe />
+      <QualityProbe />
       <Effects />
       {import.meta.env.DEV ? <DebugBridge /> : null}
     </>
@@ -47,6 +43,14 @@ function Scene(): React.ReactElement {
 }
 
 export function App(): React.ReactElement {
+  /**
+   * Piksel orani siniri kademeden geliyor. Yuksek yogunluklu ekranlarda
+   * devicePixelRatio 2 veya 3 olabiliyor, bu da dort dokuz kat piksel demek:
+   * en buyuk tek performans kolu budur. Gorsel farki zar zor gorunur, kazanc
+   * ikiye katlanma seviyesinde.
+   */
+  const quality = useQuality()
+
   useEffect(() => {
     if (!import.meta.env.DEV) return
     // Uctan uca testlerin gercek davranisi (piksel degil) dogrulamasi icin.
@@ -57,6 +61,13 @@ export function App(): React.ReactElement {
         runtime,
         /** Ses baglaminin durumu: askida mi, acik mi, tercih ne. */
         audioInfo,
+        /** Kalite tercihi, olculen kademe ve yururlukteki ayarlar. */
+        quality: () => ({
+          choice: qualityChoice(),
+          measured: measuredTier(),
+          tier: activeTier(),
+          settings: activeQuality(),
+        }),
         /** Hata ayiklama icin dunya koordinatinda zemin yuksekligi. */
         groundAt: (x: number, z: number) => terrainHeightAtWorld(SEED, x, z),
       },
@@ -66,7 +77,7 @@ export function App(): React.ReactElement {
   return (
     <>
       <Canvas
-        dpr={[1, MAX_DPR]}
+        dpr={[1, quality.maxPixelRatio]}
         shadows="percentage"
         camera={{ fov: 52, near: 1, far: 2600, position: [-12, 5, 0] }}
         gl={{

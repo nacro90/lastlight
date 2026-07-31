@@ -77,10 +77,13 @@ export const runtime = {
 /** Oyuncu bu kadar sure dokunmazsa sinematik mod geri devraliyor. */
 export const IDLE_RETURN_MS = 25_000
 
-function readSeed(): number {
+function readSeedName(): string {
   const requested = new URLSearchParams(window.location.search).get('seed')
-  return hashString(requested && requested.length > 0 ? requested : 'lastlight')
+  return requested && requested.length > 0 ? requested : 'lastlight'
 }
 
+/** Tohumun okunabilir adi; ayarlarda gosteriliyor. */
+export const SEED_NAME = readSeedName()
+
 /** URL'e ?seed=... yazinca ayni dunya tekrar cikiyor. */
-export const SEED = readSeed()
+export const SEED = hashString(SEED_NAME)

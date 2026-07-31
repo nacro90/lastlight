@@ -317,7 +317,7 @@ test.describe('ses', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'true')
 
     await toggle.click()
-    await expect(page.getByRole('button', { name: 'Sesi ac' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Sesi aç' })).toHaveAttribute(
       'aria-pressed',
       'false',
     )
@@ -355,6 +355,158 @@ test.describe('ses', () => {
 
     await page.keyboard.press('KeyM')
     await waitForLevel(page, 0.002, true)
+  })
+})
+
+interface QualityInfo {
+  choice: string
+  measured: string | null
+  tier: string
+  settings: { maxPixelRatio: number; shadowMapSize: number; dustScale: number }
+}
+
+async function readQuality(page: Page): Promise<QualityInfo> {
+  return page.evaluate(() => {
+    const debug = (window as unknown as { __lastlight?: { quality: () => QualityInfo } })
+      .__lastlight
+    if (!debug) throw new Error('__lastlight yok')
+    return debug.quality()
+  })
+}
+
+/** Kontrol kumesi kullanici niyetiyle geliyor; fareyi kimildatmak yeterli. */
+async function revealControls(page: Page): Promise<void> {
+  await page.mouse.move(400, 300)
+  await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'false')
+}
+
+test.describe('ayarlar', () => {
+  test('sinematik modda bile kontrollere ulasilabiliyor', async ({ page }) => {
+    // Dokunmatik cihazda deneyim hep sinematik modda kaliyor; kume hic
+    // gorunmezse o cihazda sesi kapatmak imkansiz olurdu.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+    await expect(page.getByRole('button', { name: 'ayarlar' })).toBeVisible()
+  })
+
+  test('ayarlar aciliyor, Esc kapatiyor ve odak dugmeye donuyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+
+    const button = page.getByRole('button', { name: 'ayarlar' })
+    await button.click()
+
+    const panel = page.getByRole('group', { name: 'Ayarlar' })
+    await expect(panel).toBeVisible()
+    // Acilinca odak panelin icine giriyor.
+    await expect(panel.getByRole('button').first()).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    await expect(button).toBeFocused()
+  })
+
+  test('ayarlar sadece klavyeyle gezilebiliyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+
+    // Dugmeye odaklanip bosluk ile aciyoruz: fare hic kullanilmiyor.
+    await page.getByRole('button', { name: 'ayarlar' }).focus()
+    await page.keyboard.press('Space')
+
+    const panel = page.getByRole('group', { name: 'Ayarlar' })
+    await expect(panel).toBeVisible()
+
+    // Sekme paneldeki secenekler arasinda ilerliyor.
+    await page.keyboard.press('Tab')
+    await expect(panel.getByRole('button').nth(1)).toBeFocused()
+    await page.keyboard.press('Enter')
+    expect((await readQuality(page)).choice).toBe('low')
+  })
+
+  test('kalite secimi hatirlaniyor ve sahneye uyguluyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+    await page.getByRole('button', { name: 'ayarlar' }).click()
+
+    const panel = page.getByRole('group', { name: 'Ayarlar' })
+    await panel.getByRole('button', { name: 'yüksek' }).click()
+    const high = await readQuality(page)
+    expect(high.tier).toBe('high')
+
+    await panel.getByRole('button', { name: 'düşük' }).click()
+    const low = await readQuality(page)
+    expect(low.tier).toBe('low')
+    expect(low.settings.maxPixelRatio).toBeLessThan(high.settings.maxPixelRatio)
+    expect(low.settings.shadowMapSize).toBeLessThan(high.settings.shadowMapSize)
+
+    // Tercih kalici: yenilemeden sonra da dusuk geliyor.
+    await page.reload()
+    await waitUntilRunning(page)
+    expect((await readQuality(page)).tier).toBe('low')
+  })
+
+  test('dusuk kademe ucgen sayisini gercekten dusuruyor', async ({ page }) => {
+    // Ayar sadece bir etiket degil: toz yogunlugu kademeyle birlikte iniyor.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+    await page.getByRole('button', { name: 'ayarlar' }).click()
+
+    const panel = page.getByRole('group', { name: 'Ayarlar' })
+    await panel.getByRole('button', { name: 'yüksek' }).click()
+
+    // Sabit sure beklemek burada yanlis olcum veriyor: yazilim rasterizer'da
+    // yarim saniye bazen tek kareye yetmiyor ve sayac bir kare geriden geliyor,
+    // yani iki okuma da degisiklikten onceki kareyi gosteriyor. Olcut sure
+    // degil, sayinin gercekten dusmesi.
+    await page.waitForFunction(
+      () => {
+        const debug = (window as unknown as { __lastlight: { quality: () => QualityInfo } })
+          .__lastlight
+        return debug.quality().tier === 'high'
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+    const before = (await readTelemetry(page)).triangles
+
+    await panel.getByRole('button', { name: 'düşük' }).click()
+    await page.waitForFunction(
+      (limit: number) => {
+        const debug = (window as unknown as { __lastlight: { perf: { triangles: number } } })
+          .__lastlight
+        return debug.perf.triangles < limit
+      },
+      before,
+      { timeout: 30_000 },
+    )
+  })
+
+  test('otomatik kademe olculuyor ve kilitleniyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+
+    // Yazilim rasterizer'da olcum dusuk kademe veriyor; onemli olan bir karara
+    // varilmasi ve o kararin saklanmasi.
+    await page.waitForFunction(
+      () => {
+        const debug = (window as unknown as { __lastlight: { quality: () => QualityInfo } })
+          .__lastlight
+        return debug.quality().measured !== null
+      },
+      undefined,
+      { timeout: 45_000 },
+    )
+
+    const info = await readQuality(page)
+    expect(info.choice).toBe('auto')
+    expect(['low', 'medium', 'high']).toContain(info.measured)
+    expect(info.tier).toBe(info.measured)
   })
 })
 
