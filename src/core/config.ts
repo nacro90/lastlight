@@ -30,7 +30,7 @@ export const SLICE = {
    * Bir satirdaki vertex sayisi. Tek sayi olmak zorunda: merkez hattin
    * uzerinde bir vertex bulunmali. Yola yakin yogun, uzaga seyrek dagilir.
    */
-  columns: 41,
+  columns: 49,
   /** Havuzdaki dilim sayisi. length * count = gorunur koridor uzunlugu. */
   poolSize: 48,
   /** Aracin arkasinda tutulan dilim sayisi (geriye bakan kamera icin). */

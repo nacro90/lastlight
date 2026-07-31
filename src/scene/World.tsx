@@ -33,7 +33,11 @@ export function World(): React.ReactElement {
     () =>
       new THREE.MeshStandardMaterial({
         vertexColors: true,
-        flatShading: true,
+        // Duz golgeleme kapali. Koridor kenarindaki kolonlar onlarca metre
+        // aralikli oldugu icin oradaki ucgenler cok uzun ve ince; duz
+        // golgeleme bunlarda faseta yerine uzun serit artefaktlari uretiyor.
+        // Dogru vertex normallerini zaten hesapliyoruz, onlari kullaniyoruz.
+        flatShading: false,
         roughness: 0.96,
         metalness: 0,
       }),

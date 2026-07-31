@@ -165,6 +165,35 @@ describe('egim', () => {
   })
 })
 
+describe('zemin surtunmesi', () => {
+  it('arazide yavaslama asfalttan daha hizli', () => {
+    // Araziye cikmanin fizikte bir karsiligi olmali, yoksa yol ile cimen
+    // arasinda hicbir fark hissedilmiyor.
+    const rolling = { ...createVehicleState(0, 0, 0), speed: 22 }
+    const onRoad = run(rolling, IDLE, 3)
+    let offRoad = rolling
+    for (let i = 0; i < Math.round(3 * 60); i++) {
+      offRoad = stepVehicle(offRoad, IDLE, 1 / 60, { grade: 0, rollingScale: 3 })
+    }
+    expect(offRoad.speed).toBeLessThan(onRoad.speed)
+  })
+
+  it('zemin katsayisi verilmezse davranis degismiyor', () => {
+    const rolling = { ...createVehicleState(0, 0, 0), speed: 22 }
+    const implicit = stepVehicle(rolling, IDLE, 1 / 60, { grade: 0 })
+    const explicit = stepVehicle(rolling, IDLE, 1 / 60, { grade: 0, rollingScale: 1 })
+    expect(implicit).toEqual(explicit)
+  })
+
+  it('arazide de arac duruyor ve durmus kaliyor', () => {
+    let state = { ...createVehicleState(0, 0, 0), speed: 12 }
+    for (let i = 0; i < 3600; i++) {
+      state = stepVehicle(state, IDLE, 1 / 60, { grade: 0, rollingScale: 4 })
+    }
+    expect(state.speed).toBe(0)
+  })
+})
+
 describe('konum integrasyonu', () => {
   it('ileri yon sapma acisini takip ediyor', () => {
     const heading = Math.PI / 6

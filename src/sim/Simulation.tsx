@@ -9,18 +9,24 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 
+import { ROAD } from '@/core/config'
+import { sampleContact, type SurfaceContact } from '@/core/contact'
 import { FIXED_STEP, createStepper } from '@/core/loop'
 import { createAutopilot } from '@/core/autopilot'
-import { sampleRoad, toRoadSpace } from '@/core/road'
-import { terrainHeight } from '@/core/terrain'
-import { createVehicleState, stepVehicle, type VehicleState } from '@/core/vehicle'
+import { smoothstep } from '@/core/math'
+import { ROAD_EDGE, sampleRoad, toRoadSpace } from '@/core/road'
+import { VEHICLE, createVehicleState, stepVehicle, type VehicleState } from '@/core/vehicle'
 import { createKeyboardSource } from '@/input/keyboard'
 import { IDLE_RETURN_MS, SEED, car, runtime } from './state'
 
 /** Yanal ivmeden gorsel yalpa katsayisi. */
 const BODY_LEAN = 0.045
-/** Yalpa ve egimin takip yumusatmasi (1/s). */
+/** Yalpa ve egimin takip yumusatmasi (1/s). Sanal suspansiyon bu. */
 const POSE_SMOOTHING = 9
+/** Aracin iz genisliginin yarisi. */
+const HALF_TRACK = 0.82
+/** Cimen ve toprakta yuvarlanma direnci bu katla artiyor. */
+const OFFROAD_ROLLING_SCALE = 3.4
 
 export function Simulation(): null {
   const keyboard = useMemo(() => createKeyboardSource(), [])
@@ -38,6 +44,13 @@ export function Simulation(): null {
   const smoothedRoll = useRef(0)
   const smoothedPitch = useRef(0)
 
+  // Zemin temasi kare basina bir kez orneklenip fizige bir sonraki karede
+  // veriliyor. Adim basina ornekleme dogru olurdu ama egim iki metrede
+  // olcusebilir olcude degismiyor; bu takas dort yukseklik sorgusunu
+  // karede bir kez yapmayi sagliyor.
+  const contact = useRef<SurfaceContact | null>(null)
+  const rollingScale = useRef(1)
+
   useFrame((_, delta) => {
     // Mod gecisi kare basina bir kez degerlendiriliyor, adim basina degil.
     const now = performance.now()
@@ -51,12 +64,16 @@ export function Simulation(): null {
     let state = vehicle.current as VehicleState
     const steps = stepper.advance(delta)
 
+    // Egim artik yolun degil, aracin altindaki gercek yuzeyin egimi. Asfalt
+    // uzerinde ikisi ayni cikiyor (arazi yol kenarinin icinde tam olarak yol
+    // yuksekliginde), araziye cikildiginda ayrisiyor.
+    const grade = contact.current?.forwardGrade ?? 0
+    const surfaceScale = rollingScale.current
+
     for (let step = 0; step < steps; step++) {
-      const road = toRoadSpace(SEED, state.x, state.z)
-      const sample = sampleRoad(SEED, road.s)
       const input =
         runtime.mode === 'driving' ? keyboard.sample() : autopilot.sample(state, FIXED_STEP)
-      state = stepVehicle(state, input, FIXED_STEP, { grade: sample.grade })
+      state = stepVehicle(state, input, FIXED_STEP, { grade, rollingScale: surfaceScale })
     }
 
     vehicle.current = state
@@ -64,15 +81,29 @@ export function Simulation(): null {
     const road = toRoadSpace(SEED, state.x, state.z)
     const sample = sampleRoad(SEED, road.s)
 
-    const targetPitch = Math.atan(sample.grade)
-    const targetRoll = sample.banking - state.yawRate * state.speed * BODY_LEAN
+    const surface = sampleContact(
+      SEED,
+      state.x,
+      state.z,
+      state.heading,
+      VEHICLE.wheelbase / 2,
+      HALF_TRACK,
+    )
+    contact.current = surface
+    rollingScale.current =
+      1 +
+      (OFFROAD_ROLLING_SCALE - 1) *
+        smoothstep(ROAD.laneHalfWidth, ROAD_EDGE + 1.5, Math.abs(road.t))
+
+    const targetPitch = surface.pitch
+    const targetRoll = surface.roll + sample.banking - state.yawRate * state.speed * BODY_LEAN
     const blend = 1 - Math.exp(-POSE_SMOOTHING * delta)
     smoothedPitch.current += (targetPitch - smoothedPitch.current) * blend
     smoothedRoll.current += (targetRoll - smoothedRoll.current) * blend
 
     car.x = state.x
     car.z = state.z
-    car.y = terrainHeight(SEED, road.s, road.t)
+    car.y = surface.height
     car.heading = state.heading
     car.pitch = smoothedPitch.current
     car.roll = smoothedRoll.current

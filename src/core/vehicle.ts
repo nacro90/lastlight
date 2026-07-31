@@ -64,8 +64,13 @@ export interface VehicleState {
 }
 
 export interface VehicleContext {
-  /** Aracin bulundugu noktada yolun egimi (dy/ds). */
+  /** Aracin altindaki yuzeyin ileri yondeki egimi (dy/dmesafe). */
   grade: number
+  /**
+   * Zemin surtunmesi katsayisi. Asfaltta 1, cimen ve toprakta daha yuksek.
+   * Verilmezse 1 kabul ediliyor, yani mevcut davranis degismiyor.
+   */
+  rollingScale?: number
 }
 
 export function createVehicleState(x: number, z: number, heading: number): VehicleState {
@@ -87,7 +92,8 @@ export function stepVehicle(
   // Boylamsal ivme. Surukleme yari kapali cozuluyor, yoksa dt degistiginde
   // sonuc gorunur sekilde kayiyor.
   const thrust = throttle * VEHICLE.enginePower * (1 - state.speed / VEHICLE.maxSpeed)
-  const resistance = VEHICLE.rollingResistance + brake * VEHICLE.brakePower
+  const rollingScale = context.rollingScale ?? 1
+  const resistance = VEHICLE.rollingResistance * rollingScale + brake * VEHICLE.brakePower
   const slope = VEHICLE.gravity * context.grade
 
   const drag = VEHICLE.dragCoefficient * state.speed

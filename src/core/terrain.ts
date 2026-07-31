@@ -12,7 +12,7 @@
 import { fbm2D } from './noise'
 import { clamp01, lerp, smoothstep } from './math'
 import { ROAD, SLICE } from './config'
-import { ROAD_EDGE, roadElevation, roadHeading, roadLateral } from './road'
+import { ROAD_EDGE, roadElevation, roadHeading, roadLateral, toRoadSpace } from './road'
 
 export const SLICE_VERTEX_COUNT = (SLICE.rows + 1) * SLICE.columns
 export const SLICE_INDEX_COUNT = SLICE.rows * (SLICE.columns - 1) * 6
@@ -42,8 +42,16 @@ const TINT_SEED = 0x0d9a_3e57
 const GRASS: readonly [number, number, number] = [0.23, 0.26, 0.17]
 const DRY: readonly [number, number, number] = [0.44, 0.37, 0.24]
 const ROCK: readonly [number, number, number] = [0.3, 0.28, 0.27]
-const ASPHALT: readonly [number, number, number] = [0.055, 0.052, 0.06]
+const ASPHALT: readonly [number, number, number] = [0.05, 0.047, 0.055]
 const GRAVEL: readonly [number, number, number] = [0.29, 0.26, 0.21]
+/** Kenar cizgisi. Bloom esigini asmayacak kadar sicak kirik beyaz. */
+const MARKING: readonly [number, number, number] = [0.52, 0.47, 0.4]
+
+/** Kenar cizgisinin serit kenarindan iceriye mesafesi. */
+const LINE_OUTER_INSET = 0.35
+const LINE_INNER_INSET = 0.55
+/** Cizginin iki yanindaki koruma capalari; keskinligi bunlar sagliyor. */
+const LINE_GUARD = 0.1
 
 /** Koridor kenarina dogru seyrelmenin sertligi. */
 const RAMP_EXPONENT = 2.2
@@ -56,7 +64,30 @@ const RAMP_EXPONENT = 2.2
  * bosluk, vertex rengi enterpolasyonunun bulanik bir kenar uretmesini onluyor.
  */
 function roadAnchors(): number[] {
-  return [1.6, 3.2, ROAD.laneHalfWidth - 0.15, ROAD.laneHalfWidth, 5.8, ROAD_EDGE - 0.15, ROAD_EDGE]
+  const lineOuter = ROAD.laneHalfWidth - LINE_OUTER_INSET
+  const lineInner = ROAD.laneHalfWidth - LINE_INNER_INSET
+  return [
+    1.6,
+    3.2,
+    lineInner - LINE_GUARD,
+    lineInner,
+    lineOuter,
+    lineOuter + LINE_GUARD,
+    ROAD.laneHalfWidth - 0.15,
+    ROAD.laneHalfWidth,
+    5.8,
+    ROAD_EDGE - 0.15,
+    ROAD_EDGE,
+  ]
+}
+
+/** Verilen yanal mesafe kenar cizgisi bandinin icinde mi. */
+function isEdgeLine(distance: number): boolean {
+  const epsilon = 1e-4
+  return (
+    distance >= ROAD.laneHalfWidth - LINE_INNER_INSET - epsilon &&
+    distance <= ROAD.laneHalfWidth - LINE_OUTER_INSET + epsilon
+  )
 }
 
 let cachedOffsets: Float32Array | null = null
@@ -169,6 +200,15 @@ export function terrainHeight(seed: number, s: number, t: number): number {
   return heightField(seed, t, worldX, worldZ, roadElevation(seed, s))
 }
 
+/**
+ * Dunya koordinatinda yukseklik sorgusu. Ters donusum sabit nokta
+ * iterasyonuyla yapiliyor; kare basina birkac cagri icin bedeli onemsiz.
+ */
+export function terrainHeightAtWorld(seed: number, x: number, z: number): number {
+  const { s, t } = toRoadSpace(seed, x, z)
+  return terrainHeight(seed, s, t)
+}
+
 /** Genisletilmis izgara: normaller icin dilim sinirinin bir satir otesi. */
 const scratch = new Float64Array(EXTENDED_ROWS * SLICE.columns * 3)
 
@@ -182,8 +222,13 @@ function colorAt(
   out: SliceBuffers,
   offset: number,
 ): void {
-  // Asfalt ve banket, geometrinin capa noktalari sayesinde keskin ayrisiyor.
+  // Asfalt, cizgi ve banket geometrinin capa noktalari sayesinde keskin
+  // ayrisiyor: gecis noktalarinda iki vertex on santim arayla duruyor.
   const distance = Math.abs(t)
+  if (isEdgeLine(distance)) {
+    for (let channel = 0; channel < 3; channel++) out.colors[offset + channel] = MARKING[channel]!
+    return
+  }
   if (distance < ROAD.laneHalfWidth - 0.05) {
     for (let channel = 0; channel < 3; channel++) out.colors[offset + channel] = ASPHALT[channel]!
     return

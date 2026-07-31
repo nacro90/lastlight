@@ -236,6 +236,29 @@ describe('vertex verisi sagligi', () => {
     }
   })
 
+  it('kenar cizgisi asfalttan belirgin sekilde acik', () => {
+    // Bir yolu yol yapan sey cizgileridir; cizgi asfalta karisirsa yol
+    // toprak seride benziyor.
+    const offsets = lateralOffsets()
+    const row = 5
+    const luminance = (column: number) => {
+      const base = (row * SLICE.columns + column) * 3
+      return buffers.colors[base]! + buffers.colors[base + 1]! + buffers.colors[base + 2]!
+    }
+
+    let lineColumn = -1
+    let asphaltColumn = -1
+    for (let column = 0; column < SLICE.columns; column++) {
+      const distance = Math.abs(offsets[column]!)
+      if (distance > 4.0 && distance < 4.3) lineColumn = column
+      if (distance < 2) asphaltColumn = column
+    }
+
+    expect(lineColumn).toBeGreaterThanOrEqual(0)
+    expect(asphaltColumn).toBeGreaterThanOrEqual(0)
+    expect(luminance(lineColumn)).toBeGreaterThan(luminance(asphaltColumn) * 4)
+  })
+
   it('asfalt araziden belirgin sekilde koyu', () => {
     const offsets = lateralOffsets()
     const centerColumn = Math.floor(SLICE.columns / 2)
