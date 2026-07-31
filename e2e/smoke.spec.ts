@@ -13,6 +13,10 @@ import { expect, test, type ConsoleMessage, type Page } from '@playwright/test'
 const DRAW_CALL_BUDGET = 150
 const TRIANGLE_BUDGET = 400_000
 const LANE_HALF_WIDTH = 4.6
+/** Govde yalpasi ust siniri (radyan), src/sim/Simulation.tsx ile ayni. */
+const MAX_BODY_ROLL = (4.5 * Math.PI) / 180
+/** Suspansiyon hareketi ust siniri (metre). */
+const MAX_SUSPENSION_TRAVEL = 0.16
 
 interface Telemetry {
   distance: number
@@ -23,6 +27,8 @@ interface Telemetry {
   mode: string
   drawCalls: number
   triangles: number
+  bodyRoll: number
+  maxWheelOffset: number
 }
 
 function collectProblems(page: Page): { errors: string[] } {
@@ -43,7 +49,7 @@ async function readTelemetry(page: Page): Promise<Telemetry> {
     const debug = (window as unknown as { __lastlight?: Record<string, never> }).__lastlight
     if (!debug) throw new Error('__lastlight yok')
     const { car, perf, runtime } = debug as unknown as {
-      car: Record<string, number>
+      car: Record<string, number> & { wheelOffsets: number[] }
       perf: Record<string, number>
       runtime: { mode: string }
     }
@@ -56,6 +62,8 @@ async function readTelemetry(page: Page): Promise<Telemetry> {
       mode: runtime.mode,
       drawCalls: perf.drawCalls!,
       triangles: perf.triangles!,
+      bodyRoll: car.bodyRoll!,
+      maxWheelOffset: Math.max(...car.wheelOffsets.map((value) => Math.abs(value))),
     }
   })
 }
@@ -144,6 +152,21 @@ test.describe('surus', () => {
       await page.waitForTimeout(1000)
       const telemetry = await readTelemetry(page)
       expect(Math.abs(telemetry.t)).toBeLessThan(LANE_HALF_WIDTH)
+    }
+  })
+
+  test('arac absurt yatmiyor ve tekerler yerde kaliyor', async ({ page }) => {
+    // Govde yalpasi yanal ivmeyle olceklendigi icin sinirsiz birakildiginda
+    // yirmi dereceye ciikip absurt duruyordu. Kasa araziye oturuyor, tekerler
+    // kendi temas noktasinda kaliyor, govde sadece birkac derece oynuyor.
+    await page.goto('/')
+    await waitUntilRunning(page)
+
+    for (let sample = 0; sample < 8; sample++) {
+      await page.waitForTimeout(700)
+      const telemetry = await readTelemetry(page)
+      expect(Math.abs(telemetry.bodyRoll)).toBeLessThanOrEqual(MAX_BODY_ROLL + 1e-6)
+      expect(telemetry.maxWheelOffset).toBeLessThanOrEqual(MAX_SUSPENSION_TRAVEL + 1e-6)
     }
   })
 

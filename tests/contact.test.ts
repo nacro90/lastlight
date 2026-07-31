@@ -88,6 +88,45 @@ describe('arazi uzerinde', () => {
   })
 })
 
+describe('tekerlek sapmalari (suspansiyon)', () => {
+  it('dort teker icin deger donuyor ve hepsi sonlu', () => {
+    const contact = contactAt(800, 40)
+    expect(contact.wheelOffsets).toHaveLength(4)
+    for (const offset of contact.wheelOffsets) expect(Number.isFinite(offset)).toBe(true)
+  })
+
+  it('yol uzerinde sapmalar milimetre altinda: asfalt pratikte duzlem', () => {
+    // Tam sifir ulasilabilir bir hedef degil: yol dingil mesafesi boyunca
+    // egrilige sahip ve ters donusumun iterasyon toleransi 1e-6. Olcut,
+    // sapmanin gorunur suspansiyon hareketinin cok altinda kalmasi.
+    for (const s of [0, 430, 1600]) {
+      for (const offset of contactAt(s, 0).wheelOffsets) {
+        expect(Math.abs(offset)).toBeLessThan(1e-3)
+      }
+    }
+  })
+
+  it('sapmalarin toplami sifir: duzlem koselerin ortasindan geciyor', () => {
+    for (const s of [120, 900, 2100]) {
+      const offsets = contactAt(s, 70).wheelOffsets
+      const sum = offsets.reduce((total, value) => total + value, 0)
+      expect(Math.abs(sum)).toBeLessThan(1e-6)
+    }
+  })
+
+  it('arazide sapmalar makul buyuklukte kaliyor', () => {
+    // Buyuk sapma suspansiyonun yutamayacagi burulma demek; teker havada
+    // kalir ve arac kirik gorunur.
+    let maxOffset = 0
+    for (let s = 0; s < 3000; s += 25) {
+      for (const offset of contactAt(s, 80).wheelOffsets) {
+        maxOffset = Math.max(maxOffset, Math.abs(offset))
+      }
+    }
+    expect(maxOffset).toBeLessThan(0.6)
+  })
+})
+
 describe('yon tutarliligi', () => {
   it('ters yone bakinca ileri egim isaret degistiriyor', () => {
     for (const s of [200, 900, 2400]) {

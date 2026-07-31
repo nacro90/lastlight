@@ -14,8 +14,16 @@ export interface CarPose {
   y: number
   z: number
   heading: number
+  /** Kasa egimi; tekerler bu duzleme oturuyor. */
   pitch: number
+  /** Kasa yatmasi; tekerler bu duzleme oturuyor. */
   roll: number
+  /** Govdenin kasaya gore ek yatmasi (viraj). Tekerleri etkilemiyor. */
+  bodyRoll: number
+  /** Govdenin kasaya gore ek egimi (gaz cokmesi, fren dalmasi). */
+  bodyPitch: number
+  /** Her tekerin kasa duzleminden dusey sapmasi: on sol, on sag, arka sol, arka sag. */
+  wheelOffsets: [number, number, number, number]
   speed: number
   distance: number
   /** Yol boyunca mesafe. */
@@ -32,6 +40,9 @@ export const car: CarPose = {
   heading: 0,
   pitch: 0,
   roll: 0,
+  bodyRoll: 0,
+  bodyPitch: 0,
+  wheelOffsets: [0, 0, 0, 0],
   speed: 0,
   distance: 0,
   s: 0,
