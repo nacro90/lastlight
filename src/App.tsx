@@ -8,6 +8,7 @@ import { DebugBridge } from '@/scene/DebugBridge'
 import { ChaseCamera } from '@/scene/ChaseCamera'
 import { Effects } from '@/scene/Effects'
 import { PerfProbe } from '@/scene/PerfProbe'
+import { Scatter } from '@/scene/Scatter'
 import { World } from '@/scene/World'
 import { Simulation } from '@/sim/Simulation'
 import { car, perf, runtime } from '@/sim/state'
@@ -28,6 +29,7 @@ function Scene(): React.ReactElement {
       <Simulation />
       <Atmosphere />
       <World />
+      <Scatter />
       <Car />
       <ChaseCamera />
       <PerfProbe />

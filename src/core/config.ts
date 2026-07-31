@@ -38,6 +38,21 @@ export const SLICE = {
 } as const
 
 /**
+ * Dilim basina serpistirilen nesne sayilari. Sabit: her dilim her tur icin
+ * ayni sayida yuva ayiriyor, gorunmeyen nesneler sifir olcekle saklaniyor.
+ * Boylece instanced mesh yuva atamasi defter tutmadan hesaplanabiliyor.
+ */
+export const SCATTER = {
+  trees: 7,
+  bushes: 5,
+  rocks: 4,
+  /** Yol kenarindan sonra nesnelerin baslayabildigi mesafe. */
+  clearance: 2.6,
+  /** Koridorun en dis yuzdesi bos birakiliyor; kenar sise gomulu kalsin. */
+  outerMargin: 0.92,
+} as const
+
+/**
  * Yol geometrisinin sinirlari. Genlikler bu sinirlardan turetiliyor, yani
  * asilmasi mumkun degil; testler bunu dogruluyor.
  */

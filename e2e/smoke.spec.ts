@@ -220,6 +220,6 @@ test.describe('gorsel kayit', () => {
     await page.goto('/')
     await waitUntilRunning(page)
     await page.waitForTimeout(2500)
-    await page.screenshot({ path: 'test-results/lastlight.png', fullPage: false })
+    await page.screenshot({ path: 'screenshots/lastlight.png', fullPage: false })
   })
 })
