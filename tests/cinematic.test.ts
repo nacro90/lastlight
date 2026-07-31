@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CUT_DURATION,
   FRAMINGS,
+  REDUCED_MOTION_CUT_DURATION,
   SHOT_MAX_DURATION,
   SHOT_MIN_DURATION,
   createCinematic,
@@ -129,9 +130,12 @@ describe('kesme', () => {
 
   it('azaltilmis hareket tercihinde kesme cok daha uzun suruyor', () => {
     // prefers-reduced-motion acikken kesme yumusak bir kaydirmaya inmeli.
+    // Oran varsayilan kesme yavaslatildigi icin dorttten ikibucuga indi:
+    // olculen sey mutlak hiz degil, azaltilmis hareketin belirgin sekilde
+    // daha yavas olmasi.
     const quick = run(60).filter((frame) => frame.cutting).length
-    const slow = run(60, 2.6).filter((frame) => frame.cutting).length
-    expect(slow).toBeGreaterThan(quick * 4)
+    const slow = run(60, REDUCED_MOTION_CUT_DURATION).filter((frame) => frame.cutting).length
+    expect(slow).toBeGreaterThan(quick * 2.5)
   })
 })
 

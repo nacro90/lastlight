@@ -10,8 +10,9 @@
  * arttikca gorus acisi birkac derece aciliyor. Sinematik modda cekim programi
  * devrede (bkz. core/cinematic): dort cerceveleme arasinda kesme yapiliyor.
  *
- * Kesme aninda yay devre disi kaliyor ve kamera hedefe dogrudan oturuyor;
- * yayla yumusatilirsa kesme savurma degil sunme gibi duruyor.
+ * Kamera zemin payi hedef konuma uygulaniyor, yay sonrasina degil. Yay
+ * sonrasina uygulanirsa alcak cekimlerde kamera her karede zemine kilitlenip
+ * gorunur bir titreme uretiyor.
  *
  * Kamera sarsintisi yok, sarsinti bu projenin duygusuna aykiri.
  */
@@ -31,7 +32,7 @@ import { SEED, car, runtime } from '@/sim/state'
 const CHASE_DISTANCE = 9.5
 const CHASE_HEIGHT = 3.4
 const CHASE_STIFFNESS = 4.2
-const CINEMATIC_STIFFNESS = 2.6
+const CINEMATIC_STIFFNESS = 3.4
 
 const LOOK_AHEAD_BASE = 14
 const LOOK_AHEAD_PER_SPEED = 0.5
@@ -46,7 +47,7 @@ const DRIFT_RATE_HEIGHT = 0.37
 const DRIFT_RATE_SIDE = 0.29
 
 /** Kamera zeminin en az bu kadar ustunde kaliyor. */
-const GROUND_CLEARANCE = 0.9
+const GROUND_CLEARANCE = 1.2
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -55,7 +56,6 @@ function prefersReducedMotion(): boolean {
 export function ChaseCamera(): null {
   const { camera } = useThree()
   const lookTarget = useRef(new THREE.Vector3())
-  const elapsed = useRef(0)
 
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion)
 
@@ -72,8 +72,6 @@ export function ChaseCamera(): null {
   )
 
   useFrame((_, delta) => {
-    elapsed.current += delta
-
     const forwardX = Math.cos(car.heading)
     const forwardZ = Math.sin(car.heading)
     // Sag vektor: ileri yonun yatayda 90 derece dondurulmusu.
@@ -86,11 +84,9 @@ export function ChaseCamera(): null {
     let lookAhead = LOOK_AHEAD_BASE + car.speed * LOOK_AHEAD_PER_SPEED
     let fov = DRIVING_FOV + car.speed * FOV_PER_SPEED
     let stiffness = CHASE_STIFFNESS
-    let snap = false
 
     if (runtime.mode === 'cinematic') {
-      const shot = cinematic.advance(delta)
-      const { framing, shotTime } = shot
+      const { framing, shotTime } = cinematic.advance(delta)
 
       // Surunme: donuk bir cekim olu duruyor, kamera cekim icinde yavasca kayiyor.
       back = framing.back + framing.driftBack * Math.sin(shotTime * DRIFT_RATE_BACK)
@@ -99,28 +95,20 @@ export function ChaseCamera(): null {
       lookAhead = framing.lookAhead
       fov = framing.fov
       stiffness = CINEMATIC_STIFFNESS
-      snap = shot.cutting
     }
 
     const desiredX = car.x - forwardX * back + rightX * side
     const desiredZ = car.z - forwardZ * back + rightZ * side
-    const desiredY = car.y + height
 
-    if (snap) {
-      camera.position.set(desiredX, desiredY, desiredZ)
-    } else {
-      const blend = 1 - Math.exp(-stiffness * delta)
-      camera.position.x += (desiredX - camera.position.x) * blend
-      camera.position.y += (desiredY - camera.position.y) * blend
-      camera.position.z += (desiredZ - camera.position.z) * blend
-    }
+    // Zemin payi hedefe uygulaniyor, yay sonrasina degil: boylece yay onu da
+    // yumusatiyor ve kamera zemine kilitlenmiyor.
+    const ground = terrainHeightAtWorld(SEED, desiredX, desiredZ)
+    const desiredY = Math.max(car.y + height, ground + GROUND_CLEARANCE)
 
-    // Kamera zeminin altina girmesin: alcak cekimlerde arazi kabartisi
-    // kamerayi yutabiliyor.
-    const ground = terrainHeightAtWorld(SEED, camera.position.x, camera.position.z)
-    if (camera.position.y < ground + GROUND_CLEARANCE) {
-      camera.position.y = ground + GROUND_CLEARANCE
-    }
+    const blend = 1 - Math.exp(-stiffness * delta)
+    camera.position.x += (desiredX - camera.position.x) * blend
+    camera.position.y += (desiredY - camera.position.y) * blend
+    camera.position.z += (desiredZ - camera.position.z) * blend
 
     lookTarget.current.set(
       car.x + forwardX * lookAhead,

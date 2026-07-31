@@ -133,7 +133,7 @@ export function Car(): React.ReactElement {
             }}
             castShadow
           >
-            <cylinderGeometry args={[WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 12]} />
+            <cylinderGeometry args={[WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 20]} />
             <meshStandardMaterial color={WHEEL_COLOR} roughness={0.85} flatShading />
           </mesh>
         </group>

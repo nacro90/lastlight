@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { createVehicleState, stepVehicle, VEHICLE, type DriveInput } from '@/core/vehicle'
+import {
+  createVehicleState,
+  interpolateVehicle,
+  stepVehicle,
+  VEHICLE,
+  type DriveInput,
+} from '@/core/vehicle'
 
 const IDLE: DriveInput = { throttle: 0, brake: 0, steer: 0 }
 const FULL_THROTTLE: DriveInput = { throttle: 1, brake: 0, steer: 0 }
@@ -212,5 +218,48 @@ describe('konum integrasyonu', () => {
       previous = state.distance
     }
     expect(state.distance).toBeGreaterThan(0)
+  })
+})
+
+describe('render enterpolasyonu', () => {
+  const a = { ...createVehicleState(10, 4, 0.2), speed: 18, distance: 100, yawRate: 0.1, steer: 0.3 }
+  const b = { ...createVehicleState(12, 5, 0.3), speed: 20, distance: 120, yawRate: 0.2, steer: 0.4 }
+
+  it('uc noktalari korur', () => {
+    expect(interpolateVehicle(a, b, 0)).toEqual(a)
+    expect(interpolateVehicle(a, b, 1)).toEqual(b)
+  })
+
+  it('ortayi bulur', () => {
+    const mid = interpolateVehicle(a, b, 0.5)
+    expect(mid.x).toBeCloseTo(11, 10)
+    expect(mid.z).toBeCloseTo(4.5, 10)
+    expect(mid.heading).toBeCloseTo(0.25, 10)
+    expect(mid.speed).toBeCloseTo(19, 10)
+    expect(mid.distance).toBeCloseTo(110, 10)
+  })
+
+  it('alpha araligin disina tasarsa sikistirir', () => {
+    expect(interpolateVehicle(a, b, -1)).toEqual(a)
+    expect(interpolateVehicle(a, b, 5)).toEqual(b)
+  })
+
+  it('monoton: artan alpha geriye gitmiyor', () => {
+    // Bu, kare hizi fizik adimindan yuksek oldugunda olusan mikro takilmayi
+    // olduren sey. Enterpolasyon olmazsa arac bazi karelerde hic ilerlemiyor.
+    let previous = -Infinity
+    for (let alpha = 0; alpha <= 1; alpha += 0.05) {
+      const value = interpolateVehicle(a, b, alpha).distance
+      expect(value).toBeGreaterThanOrEqual(previous)
+      previous = value
+    }
+  })
+
+  it('sapma acisini kisa yoldan enterpole ediyor', () => {
+    const near = { ...a, heading: 3.1 }
+    const wrapped = { ...b, heading: -3.1 }
+    const mid = interpolateVehicle(near, wrapped, 0.5)
+    // Kisa yol pi uzerinden gecmeli, sifir uzerinden degil.
+    expect(Math.abs(mid.heading)).toBeGreaterThan(3.0)
   })
 })

@@ -77,6 +77,42 @@ export function createVehicleState(x: number, z: number, heading: number): Vehic
   return { x, z, heading, speed: 0, steer: 0, yawRate: 0, distance: 0 }
 }
 
+/**
+ * Iki fizik durumu arasinda render enterpolasyonu.
+ *
+ * Fizik sabit adimla kosuyor, render ise ekranin kare hiziyla. Ikisi
+ * ortusmedigi zaman (ornek: 144 Hz ekran, 120 Hz fizik) bazi karelerde hic
+ * adim atilmiyor ve arac o karede duruyor, kamera ise devam ediyor; sonuc
+ * gorunur bir mikro titreme. Cozum, render zamanini iki fizik durumu arasinda
+ * konumlandirmak.
+ *
+ * Sapma acisi kisa yoldan enterpole ediliyor; yoksa aci sarmasinda arac bir
+ * karede tam tur atiyor.
+ */
+export function interpolateVehicle(
+  from: VehicleState,
+  to: VehicleState,
+  alpha: number,
+): VehicleState {
+  const amount = clamp(alpha, 0, 1)
+  if (amount === 0) return { ...from }
+  if (amount === 1) return { ...to }
+
+  let headingDelta = to.heading - from.heading
+  while (headingDelta > Math.PI) headingDelta -= 2 * Math.PI
+  while (headingDelta < -Math.PI) headingDelta += 2 * Math.PI
+
+  return {
+    x: from.x + (to.x - from.x) * amount,
+    z: from.z + (to.z - from.z) * amount,
+    heading: from.heading + headingDelta * amount,
+    speed: from.speed + (to.speed - from.speed) * amount,
+    steer: from.steer + (to.steer - from.steer) * amount,
+    yawRate: from.yawRate + (to.yawRate - from.yawRate) * amount,
+    distance: from.distance + (to.distance - from.distance) * amount,
+  }
+}
+
 export function stepVehicle(
   state: VehicleState,
   input: DriveInput,

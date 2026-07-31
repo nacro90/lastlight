@@ -81,3 +81,28 @@ describe('determinizm', () => {
     }
   })
 })
+
+describe('artan zaman', () => {
+  it('adima donusmemis zaman her zaman sabit adimdan kucuk', () => {
+    // Render enterpolasyonu bu degere bagli: alpha = pending / FIXED_STEP.
+    const stepper = createStepper()
+    for (const frameTime of [1 / 144, 1 / 60, 1 / 30, 0.007, 0.021]) {
+      for (let i = 0; i < 200; i++) {
+        stepper.advance(frameTime)
+        expect(stepper.pending).toBeGreaterThanOrEqual(0)
+        expect(stepper.pending).toBeLessThan(FIXED_STEP)
+      }
+    }
+  })
+
+  it('kare hizi fizik adimindan yuksekken bazi kareler adim atmiyor', () => {
+    // Enterpolasyonun neden gerekli oldugunu belgeliyor: 144 Hz'de kare
+    // deseni 1,1,1,0 seklinde ve o sifir kareler mikro takilma uretiyor.
+    const stepper = createStepper()
+    let emptyFrames = 0
+    for (let i = 0; i < 300; i++) {
+      if (stepper.advance(1 / 144) === 0) emptyFrames += 1
+    }
+    expect(emptyFrames).toBeGreaterThan(30)
+  })
+})

@@ -15,7 +15,13 @@ import { FIXED_STEP, createStepper } from '@/core/loop'
 import { createAutopilot } from '@/core/autopilot'
 import { clamp, smoothstep } from '@/core/math'
 import { ROAD_EDGE, sampleRoad, toRoadSpace } from '@/core/road'
-import { VEHICLE, createVehicleState, stepVehicle, type VehicleState } from '@/core/vehicle'
+import {
+  VEHICLE,
+  createVehicleState,
+  interpolateVehicle,
+  stepVehicle,
+  type VehicleState,
+} from '@/core/vehicle'
 import { createKeyboardSource } from '@/input/keyboard'
 import { IDLE_RETURN_MS, SEED, car, runtime } from './state'
 
@@ -56,11 +62,24 @@ export function Simulation(): null {
     vehicle.current = { ...createVehicleState(start.x, start.z, start.heading), speed: 20 }
   }
 
+  /**
+   * Bir onceki fizik durumu. Render zamani iki durum arasinda konumlaniyor,
+   * cunku ekran kare hizi ile fizik adimi ortusmuyor: 144 Hz ekranda kare
+   * deseni 1,1,1,0 oluyor ve o sifir karelerde arac duruyor, kamera ise devam
+   * ediyor. Gorunur mikro titremenin sebebi buydu.
+   */
+  const priorState = useRef<VehicleState | null>(null)
+
   const smoothedRoll = useRef(0)
   const smoothedPitch = useRef(0)
   const smoothedBodyRoll = useRef(0)
   const smoothedBodyPitch = useRef(0)
-  const previousSpeed = useRef(0)
+  /**
+   * Boylamsal ivme fizik adimindan turetiliyor, kare suresinden degil. Kare
+   * suresi degisken oldugu icin turev gurultulu cikiyor ve govde egiminde
+   * titreme uretiyor.
+   */
+  const acceleration = useRef(0)
 
   // Zemin temasi kare basina bir kez orneklenip fizige bir sonraki karede
   // veriliyor. Adim basina ornekleme dogru olurdu ama egim iki metrede
@@ -80,6 +99,7 @@ export function Simulation(): null {
     }
 
     let state = vehicle.current as VehicleState
+    let prior = priorState.current ?? state
     const steps = stepper.advance(delta)
 
     // Egim artik yolun degil, aracin altindaki gercek yuzeyin egimi. Asfalt
@@ -91,19 +111,26 @@ export function Simulation(): null {
     for (let step = 0; step < steps; step++) {
       const input =
         runtime.mode === 'driving' ? keyboard.sample() : autopilot.sample(state, FIXED_STEP)
+      prior = state
       state = stepVehicle(state, input, FIXED_STEP, { grade, rollingScale: surfaceScale })
+      acceleration.current = (state.speed - prior.speed) / FIXED_STEP
     }
 
     vehicle.current = state
+    priorState.current = prior
 
-    const road = toRoadSpace(SEED, state.x, state.z)
+    // Render zamani son iki fizik durumu arasinda. alpha, adima donusmemis
+    // birikmis zamanin sabit adima orani.
+    const rendered = interpolateVehicle(prior, state, stepper.pending / FIXED_STEP)
+
+    const road = toRoadSpace(SEED, rendered.x, rendered.z)
     const sample = sampleRoad(SEED, road.s)
 
     const surface = sampleContact(
       SEED,
-      state.x,
-      state.z,
-      state.heading,
+      rendered.x,
+      rendered.z,
+      rendered.heading,
       VEHICLE.wheelbase / 2,
       HALF_TRACK,
     )
@@ -120,9 +147,7 @@ export function Simulation(): null {
 
     // Govde kasanin uzerinde birkac derece oynuyor: viraj yalpasi ve dalma.
     // Bunlar tekerleri etkilemiyor, o yuzden teker havada kalmiyor.
-    const lateralAcceleration = state.yawRate * state.speed
-    const longitudinalAcceleration = delta > 0 ? (state.speed - previousSpeed.current) / delta : 0
-    previousSpeed.current = state.speed
+    const lateralAcceleration = rendered.yawRate * rendered.speed
 
     const targetBodyRoll = clamp(
       sample.banking - lateralAcceleration * BODY_LEAN,
@@ -130,7 +155,7 @@ export function Simulation(): null {
       MAX_BODY_ROLL,
     )
     const targetBodyPitch = clamp(
-      longitudinalAcceleration * BODY_DIVE,
+      acceleration.current * BODY_DIVE,
       -MAX_BODY_PITCH,
       MAX_BODY_PITCH,
     )
@@ -139,10 +164,10 @@ export function Simulation(): null {
     smoothedBodyRoll.current += (targetBodyRoll - smoothedBodyRoll.current) * bodyBlend
     smoothedBodyPitch.current += (targetBodyPitch - smoothedBodyPitch.current) * bodyBlend
 
-    car.x = state.x
-    car.z = state.z
+    car.x = rendered.x
+    car.z = rendered.z
     car.y = surface.height
-    car.heading = state.heading
+    car.heading = rendered.heading
     car.pitch = smoothedPitch.current
     car.roll = smoothedRoll.current
     car.bodyRoll = smoothedBodyRoll.current
@@ -155,11 +180,11 @@ export function Simulation(): null {
         SUSPENSION_TRAVEL,
       )
     }
-    car.speed = state.speed
-    car.distance = state.distance
+    car.speed = rendered.speed
+    car.distance = rendered.distance
     car.s = road.s
     car.t = road.t
-    car.yawRate = state.yawRate
+    car.yawRate = rendered.yawRate
   })
 
   return null

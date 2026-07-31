@@ -3,9 +3,9 @@
  *
  * Sayfa acildiginda calisan mod bu, ve portfolyo linkinde ilk uc saniyeyi
  * tasiyan sey. Kamera dort cerceveleme arasinda sekiz on iki saniyede bir
- * kesme yapiyor. Kesme cok kisa bir parametre karisimi olarak uygulaniyor:
- * sert kesme olmadigi icin cizgi film gibi durmuyor, ama yeterince hizli
- * oldugu icin surekli sallanan tek bir cekim gibi de durmuyor.
+ * kesme yapiyor. Kesme, cerceveleme parametrelerinin bir buçuk saniyede
+ * karismasi olarak uygulaniyor: sert kesme sicrama gibi hissediyor ve sakin
+ * bir deneyimde yeri yok.
  *
  * prefers-reduced-motion acikken kesme suresi uzatiliyor ve kesme yumusak bir
  * kaydirmaya iniyor; kamera hareketi tamamen kaybolmuyor cunku o zaman deneyim
@@ -33,9 +33,11 @@ export interface Framing {
 
 export const FRAMINGS: readonly Framing[] = [
   // Arkadan alcak ve genis: yolun akisini en iyi anlatan cekim.
-  { back: 8.2, height: 1.5, side: 0.4, lookAhead: 22, fov: 62, driftBack: 1.6, driftHeight: 0.35, driftSide: 1.1 },
+  { back: 8.2, height: 1.75, side: 0.4, lookAhead: 22, fov: 62, driftBack: 1.6, driftHeight: 0.3, driftSide: 1.1 },
   // Yol seviyesinden yandan: hiz hissi en yuksek cekim.
-  { back: 3.4, height: 0.75, side: 7.8, lookAhead: 13, fov: 48, driftBack: 2.4, driftHeight: 0.15, driftSide: 0.9 },
+  // Yukseklik kamera zemin payinin uzerinde tutuluyor; altinda kalirsa kamera
+  // her karede zemine kilitleniyor ve gorunur bir titreme uretiyor.
+  { back: 3.4, height: 1.55, side: 7.8, lookAhead: 13, fov: 48, driftBack: 2.4, driftHeight: 0.2, driftSide: 0.9 },
   // Tepeden vince: manzarayi ve vadiyi gosteren cekim.
   { back: 17, height: 11.5, side: -6.5, lookAhead: 34, fov: 44, driftBack: 3.2, driftHeight: 1.4, driftSide: 2.2 },
   // Onden geri giderek takip: araci ve arkasindaki gunesi birlikte veriyor.
@@ -44,10 +46,13 @@ export const FRAMINGS: readonly Framing[] = [
 
 export const SHOT_MIN_DURATION = 8
 export const SHOT_MAX_DURATION = 12
-/** Varsayilan kesme suresi: hizli bir savurma. */
-export const CUT_DURATION = 0.18
-/** Azaltilmis hareket tercihinde kesme bu sureye yayiliyor. */
-export const REDUCED_MOTION_CUT_DURATION = 2.6
+/**
+ * Kesme suresi. Bir buçuk saniye: hizli kesme savurma degil sicrama gibi
+ * hissediyor ve sakin bir deneyimde yeri yok.
+ */
+export const CUT_DURATION = 1.5
+/** Azaltilmis hareket tercihinde kesme bu sureye yayilip kaydirmaya iniyor. */
+export const REDUCED_MOTION_CUT_DURATION = 5
 
 const DURATION_SALT = 0x77c1
 
