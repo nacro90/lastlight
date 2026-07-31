@@ -14,9 +14,10 @@
  */
 
 import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
+import { skyColorAt } from '@/core/sky'
 import { car } from '@/sim/state'
 import { SkyDome } from './SkyDome'
 
@@ -30,10 +31,21 @@ export const SUN_DIRECTION = new THREE.Vector3(
   SUN_AZIMUTH_OFFSET,
 ).normalize()
 
-/** Sis rengi ufuk rengiyle ayni aileden: arazi gokyuzune eriyerek karisiyor. */
-export const FOG_COLOR = '#8f3f18'
+/**
+ * Sis rengi her karede bakis yonundeki gokyuzu renginden hesaplaniyor.
+ * Sabit tek renk yanlisti: kamera arkaya dondugunde gokyuzu mor ama sis
+ * turuncu kaliyor, yani arazi gokyuzune yanlis renkte karisiyordu.
+ */
 export const FOG_NEAR = 45
 export const FOG_FAR = 330
+
+/** Baslangic degeri; ilk kareden itibaren gokyuzunden hesaplanan renk geciyor. */
+const FOG_INITIAL_COLOR = '#8f3f18'
+
+/** Sis gokyuzunden biraz koyu: arazi bir isik kaynagi degil. */
+const FOG_DIMMING = 0.8
+/** Sisin bloom esigini asmasi engelleniyor; sis parlamamali. */
+const FOG_MAX_CHANNEL = 1.25
 
 const SUN_COLOR = '#ffb066'
 const SKY_TINT = '#7a5c9a'
@@ -45,8 +57,29 @@ const SHADOW_EXTENT = 105
 
 export function Atmosphere(): React.ReactElement {
   const light = useRef<THREE.DirectionalLight>(null)
+  const { scene, camera } = useThree()
+  const viewDirection = useRef(new THREE.Vector3())
 
   useFrame(() => {
+    // Sis rengi bakis azimutundaki ufuk rengi. Dusey bileseni neredeyse
+    // sifirlaniyor: sis arazi uzerinde, yani ufuk hizasinda yasiyor.
+    camera.getWorldDirection(viewDirection.current)
+    viewDirection.current.y = 0.02
+    viewDirection.current.normalize()
+
+    const fog = scene.fog
+    if (fog) {
+      const color = skyColorAt(
+        [viewDirection.current.x, viewDirection.current.y, viewDirection.current.z],
+        [SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z],
+      )
+      fog.color.setRGB(
+        Math.min(color[0] * FOG_DIMMING, FOG_MAX_CHANNEL),
+        Math.min(color[1] * FOG_DIMMING, FOG_MAX_CHANNEL),
+        Math.min(color[2] * FOG_DIMMING, FOG_MAX_CHANNEL),
+      )
+    }
+
     const sun = light.current
     if (!sun) return
 
@@ -62,7 +95,7 @@ export function Atmosphere(): React.ReactElement {
   return (
     <>
       <SkyDome sunDirection={SUN_DIRECTION} />
-      <fog attach="fog" args={[FOG_COLOR, FOG_NEAR, FOG_FAR]} />
+      <fog attach="fog" args={[FOG_INITIAL_COLOR, FOG_NEAR, FOG_FAR]} />
 
       {/* Alcak gunes yere yalnizca sin(6.8 derece) kadar, yani yuzde on iki
           isik veriyor. Zemini okunur kilan sey bu yuzden yarim kure isigidir;

@@ -7,13 +7,15 @@
  * sutbeyaz bir haleyle kapliyor. Parlakligi kendimiz belirledigimizde bloom'a
  * sadece gunes diski giriyor.
  *
- * Ikinci kazanc sanat yonetimi: paletin dort rengi birebir burada, tesadufe
- * bagli degil. Ucuncu kazanc bir bagimliligin eksilmesi.
+ * Matematik ve butun sabitler core/sky icinde. Shader ile sis rengi ayni
+ * kaynaktan besleniyor; iki yerde ayri tutulursa birbirinden kayarlar.
  */
 
 import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+
+import { SKY } from '@/core/sky'
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec3 vDirection;
@@ -23,35 +25,54 @@ const VERTEX_SHADER = /* glsl */ `
   }
 `
 
+/** core/sky.ts icindeki skyColorAt ile birebir ayni matematik. */
 const FRAGMENT_SHADER = /* glsl */ `
   precision highp float;
 
   varying vec3 vDirection;
 
   uniform vec3 uHorizon;
+  uniform vec3 uHorizonAway;
   uniform vec3 uZenith;
   uniform vec3 uBelow;
   uniform vec3 uSunColor;
   uniform vec3 uSunDirection;
+
+  uniform float uHorizonExponent;
+  uniform float uBelowExponent;
+  uniform float uAzimuthExponent;
+
   uniform float uSunIntensity;
+  uniform float uDiskFalloff;
+  uniform float uAureoleStrength;
+  uniform float uAureoleFalloff;
   uniform float uHaloStrength;
+  uniform float uHaloFalloff;
 
   void main() {
-    vec3 direction = normalize(vDirection);
-    float height = direction.y;
+    vec3 view = normalize(vDirection);
+    vec3 sun = normalize(uSunDirection);
 
-    // Ufuktan zenite: kucuk us degeri sicak bandi ufka yakin tutuyor.
-    vec3 color = mix(uHorizon, uZenith, pow(clamp(height, 0.0, 1.0), 0.42));
-    color = mix(color, uBelow, pow(clamp(-height, 0.0, 1.0), 0.38));
+    float alignment = dot(view, sun);
 
-    float towardSun = max(dot(direction, normalize(uSunDirection)), 0.0);
+    // Azimut: gunese donuk tarafta sicak ufuk, ters tarafta mor ufuk.
+    float warmSide = pow(clamp((alignment + 1.0) * 0.5, 0.0, 1.0), uAzimuthExponent);
+    vec3 horizonColor = mix(uHorizonAway, uHorizon, warmSide);
 
-    // Genis hale: gunesin etrafindaki sicak yayilma.
-    color += uSunColor * pow(towardSun, 7.0) * uHaloStrength;
-    // Disk: bloom esiginin ustune cikan tek sey bu.
-    color += uSunColor * pow(towardSun, 900.0) * uSunIntensity;
+    float upward = pow(clamp(view.y, 0.0, 1.0), uHorizonExponent);
+    float downward = pow(clamp(-view.y, 0.0, 1.0), uBelowExponent);
 
-    gl_FragColor = vec4(color, 1.0);
+    vec3 color = mix(horizonColor, uZenith, upward);
+    color = mix(color, uBelow, downward);
+
+    // Us yerine eksponansiyel dusus: pow(x, 60000) hassasiyet kaybediyor.
+    float angular = 1.0 - max(alignment, 0.0);
+    float glow =
+      uSunIntensity * exp(-uDiskFalloff * angular) +
+      uAureoleStrength * exp(-uAureoleFalloff * angular) +
+      uHaloStrength * exp(-uHaloFalloff * angular);
+
+    gl_FragColor = vec4(color + uSunColor * glow, 1.0);
   }
 `
 
@@ -75,15 +96,23 @@ export function SkyDome({ sunDirection }: SkyDomeProps): React.ReactElement {
         depthWrite: false,
         fog: false,
         uniforms: {
-          // Degerler dogrusal uzayda. Ufuk 1'in hemen ustunde: hafifce
-          // parliyor ama bloom esigini tek basina asmiyor.
-          uHorizon: { value: new THREE.Vector3(1.15, 0.42, 0.17) },
-          uZenith: { value: new THREE.Vector3(0.085, 0.062, 0.19) },
-          uBelow: { value: new THREE.Vector3(0.16, 0.075, 0.07) },
-          uSunColor: { value: new THREE.Vector3(1.0, 0.72, 0.42) },
+          uHorizon: { value: new THREE.Vector3(...SKY.horizon) },
+          uHorizonAway: { value: new THREE.Vector3(...SKY.horizonAway) },
+          uZenith: { value: new THREE.Vector3(...SKY.zenith) },
+          uBelow: { value: new THREE.Vector3(...SKY.below) },
+          uSunColor: { value: new THREE.Vector3(...SKY.sun) },
           uSunDirection: { value: sunDirection.clone() },
-          uSunIntensity: { value: 22 },
-          uHaloStrength: { value: 0.38 },
+
+          uHorizonExponent: { value: SKY.horizonExponent },
+          uBelowExponent: { value: SKY.belowExponent },
+          uAzimuthExponent: { value: SKY.azimuthExponent },
+
+          uSunIntensity: { value: SKY.sunIntensity },
+          uDiskFalloff: { value: SKY.diskFalloff },
+          uAureoleStrength: { value: SKY.aureoleStrength },
+          uAureoleFalloff: { value: SKY.aureoleFalloff },
+          uHaloStrength: { value: SKY.haloStrength },
+          uHaloFalloff: { value: SKY.haloFalloff },
         },
       }),
     [sunDirection],

@@ -239,15 +239,18 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 
 ### Gün 2: sanat yönetimi
 
-- [ ] `scene/Atmosphere`: gökyüzü gradyanı, güneş diski, sise oturtulmuş renk, toz zerreleri
-- [ ] `scene/Lighting`: alçak açı directional, aracı takip eden dar shadow frustumu, sis mesafesi kalibrasyonu
-- [ ] `scene/Effects`: ACES tone mapping, yarım çözünürlük bloom, vinyet, film grain
-- [ ] `scene/Scatter`: instanced ağaç/çalı/taş, `t` eksenine bağlı LOD, sise karışma
-- [ ] `scene/CarModel`: prosedürel araç, sahte gövde yalpası, tekerlek dönüşü
-- [ ] `scene/CameraRig`: yaylı takip, ileri bakış, hıza bağlı FOV
-- [ ] `input/autopilot` + sinematik çerçevelemeler ve kesmeler
-- [ ] Devir teslim (0.6 sn) ve 25 sn boşta kalma dönüşü
-- [ ] **Kanıt:** ekran görüntüleri mood board ile yan yana, çizim çağrısı bütçe içinde
+- [x] `scene/Atmosphere`: gökyüzü gradyanı, güneş diski, sise oturtulmuş renk
+- [ ] Toz zerreleri
+- [x] Alçak açı directional, aracı takip eden dar shadow frustumu, sis mesafesi kalibrasyonu
+- [x] `scene/Effects`: AgX tone mapping, mipmap bloom, vinyet
+- [x] `scene/Scatter`: instanced ağaç/çalı/taş, yoğunluk alanı, eğim eşiği
+- [x] `scene/Car`: prosedürel araç, kasa/teker/gövde ayrımı, süspansiyon, tekerlek dönüşü
+- [x] `scene/ContactShadow`: prosedürel temas gölgesi (planda yoktu, alçak güneş gerektirdi)
+- [x] `scene/ChaseCamera`: yaylı takip, ileri bakış, hıza bağlı FOV
+- [x] `core/cinematic` + dört çerçeveleme ve kesmeler, azaltılmış hareket desteği
+- [x] `core/sky`: iki eksenli gradyan, gerçekçi güneş diski, yön duyarlı sis (planda yoktu)
+- [x] Devir teslim ve 25 sn boşta kalma dönüşü
+- [x] **Kanıt:** 179 birim testi, 13 e2e testi, ekran görüntüleri, çizim çağrısı 110/150
 
 ### Gün 3: cila ve kanıt
 
