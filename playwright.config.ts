@@ -11,6 +11,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   reporter: [['list']],
+  // Teshis araci depoda duruyor ama normal kosuya girmiyor. Elle cagirmak icin:
+  //   pnpm inspect
+  testIgnore: process.env.INSPECT ? [] : ['**/inspect.spec.ts'],
   outputDir: './test-results',
 
   use: {

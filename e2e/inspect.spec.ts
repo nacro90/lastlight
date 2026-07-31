@@ -29,6 +29,12 @@ test('inspect', async ({ page }) => {
     const car = (light.car as Record<string, number>)
     const perf = (light.perf as Record<string, number>)
 
+    // Teker temas kontrolu: her tekerin en alt noktasi ile o noktadaki zemin
+    // yuksekligi arasindaki fark. Sifira yakin olmasi gerekiyor.
+    const groundAt = (light as unknown as { groundAt: (x: number, z: number) => number }).groundAt
+    const wheelReport: string[] = []
+    const WHEEL_RADIUS = 0.34
+
     let meshCount = 0
     let visibleMeshes = 0
     const lines: string[] = []
@@ -45,7 +51,20 @@ test('inspect', async ({ page }) => {
       const position = object.position as { x: number; y: number; z: number }
       const count = geometry.attributes?.position?.count ?? 0
 
-      if (count === 451 && lines.length < 2) {
+      const geometryType = (object.geometry as { type?: string }).type
+      if (geometryType === 'CylinderGeometry' && wheelReport.length < 4) {
+        const matrix = object.matrixWorld as { elements: number[] }
+        const wx = matrix.elements[12]!
+        const wy = matrix.elements[13]!
+        const wz = matrix.elements[14]!
+        const bottom = wy - WHEEL_RADIUS
+        wheelReport.push(
+          `teker(${wx.toFixed(1)},${wz.toFixed(1)}) alt=${bottom.toFixed(3)} ` +
+            `zemin=${groundAt(wx, wz).toFixed(3)} fark=${(bottom - groundAt(wx, wz)).toFixed(3)}`,
+        )
+      }
+
+      if (count === 539 && lines.length < 2) {
         const array = geometry.attributes!.position!.array
         const sphere = geometry.boundingSphere
         lines.push(
@@ -62,6 +81,7 @@ test('inspect', async ({ page }) => {
       `kamera=(${camera.position.x.toFixed(1)},${camera.position.y.toFixed(1)},${camera.position.z.toFixed(1)}) fov=${camera.fov.toFixed(1)} far=${camera.far}`,
       `arac=(${car.x!.toFixed(1)},${car.y!.toFixed(1)},${car.z!.toFixed(1)}) s=${car.s!.toFixed(1)} t=${car.t!.toFixed(2)} hiz=${car.speed!.toFixed(1)}`,
       `perf draw=${perf.drawCalls} tri=${perf.triangles} fps=${perf.fps!.toFixed(1)}`,
+      ...wheelReport,
       ...lines,
     ].join('\n')
   })

@@ -81,9 +81,14 @@ export function Atmosphere(): React.ReactElement {
         shadow-camera-bottom={-SHADOW_EXTENT}
         shadow-camera-near={1}
         shadow-camera-far={520}
-        // Siyirtan isikta golge akneleri kaciniilmaz; normalBias dogru arac.
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.024}
+        /* Derinlik bias'i sifir. Sebebi olculdu: -0.0004 normalize derinlik,
+           1 ile 520 metre araliginda isik yonunde 0.21 metre oteleme demek, ve
+           gunes 6.8 derecede oldugu icin bu yatayda 1.75 metreye donusuyor.
+           Yani golge tekerlerden iki metre uzakta basliyordu ve arac havada
+           gorunuyordu. Siyirtan isikta akne icin dogru arac normalBias, ve o
+           da mumkun oldugunca kucuk. */
+        shadow-bias={0}
+        shadow-normalBias={0.012}
       />
     </>
   )

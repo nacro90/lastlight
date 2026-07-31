@@ -4,14 +4,16 @@ import * as THREE from 'three'
 
 import { Atmosphere } from '@/scene/Atmosphere'
 import { Car } from '@/scene/Car'
+import { ContactShadow } from '@/scene/ContactShadow'
 import { DebugBridge } from '@/scene/DebugBridge'
 import { ChaseCamera } from '@/scene/ChaseCamera'
 import { Effects } from '@/scene/Effects'
 import { PerfProbe } from '@/scene/PerfProbe'
 import { Scatter } from '@/scene/Scatter'
 import { World } from '@/scene/World'
+import { terrainHeightAtWorld } from '@/core/terrain'
 import { Simulation } from '@/sim/Simulation'
-import { car, perf, runtime } from '@/sim/state'
+import { SEED, car, perf, runtime } from '@/sim/state'
 import { Hud } from '@/ui/Hud'
 
 /**
@@ -31,6 +33,7 @@ function Scene(): React.ReactElement {
       <World />
       <Scatter />
       <Car />
+      <ContactShadow />
       <ChaseCamera />
       <PerfProbe />
       <Effects />
@@ -43,7 +46,15 @@ export function App(): React.ReactElement {
   useEffect(() => {
     if (!import.meta.env.DEV) return
     // Uctan uca testlerin gercek davranisi (piksel degil) dogrulamasi icin.
-    Object.assign(window, { __lastlight: { car, perf, runtime } })
+    Object.assign(window, {
+      __lastlight: {
+        car,
+        perf,
+        runtime,
+        /** Hata ayiklama icin dunya koordinatinda zemin yuksekligi. */
+        groundAt: (x: number, z: number) => terrainHeightAtWorld(SEED, x, z),
+      },
+    })
   }, [])
 
   return (
