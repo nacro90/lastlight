@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 
+import { Sound, audioInfo } from '@/audio/Sound'
 import { Atmosphere } from '@/scene/Atmosphere'
 import { Car } from '@/scene/Car'
 import { ContactShadow } from '@/scene/ContactShadow'
@@ -37,6 +38,7 @@ function Scene(): React.ReactElement {
       <ContactShadow />
       <Dust />
       <ChaseCamera />
+      <Sound />
       <PerfProbe />
       <Effects />
       {import.meta.env.DEV ? <DebugBridge /> : null}
@@ -53,6 +55,8 @@ export function App(): React.ReactElement {
         car,
         perf,
         runtime,
+        /** Ses baglaminin durumu: askida mi, acik mi, tercih ne. */
+        audioInfo,
         /** Hata ayiklama icin dunya koordinatinda zemin yuksekligi. */
         groundAt: (x: number, z: number) => terrainHeightAtWorld(SEED, x, z),
       },

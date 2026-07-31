@@ -7,8 +7,9 @@
  * ornekleniyor; her karede yazmak her karede reconciliation demek olurdu.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { setSoundEnabled, soundEnabled, subscribeSound } from '@/audio/preference'
 import { car, perf, runtime } from '@/sim/state'
 
 const SAMPLE_INTERVAL_MS = 125
@@ -24,6 +25,42 @@ function useSampled<T>(read: () => T, intervalMs = SAMPLE_INTERVAL_MS): T {
   }, [read, intervalMs])
 
   return value
+}
+
+/**
+ * Ses dugmesi. Alt bandin sag ucunda, sabit; nabız atan veya parlayan hicbir
+ * sey yok. Fark edilmesi gereken sey yerlesimle cozuluyor.
+ *
+ * M tusu da ayni tercihi degistiriyor: klavyeyle surerken fareye gitmek
+ * akisi bozuyor.
+ */
+function SoundToggle(): React.ReactElement {
+  const [enabled, setEnabled] = useState(soundEnabled)
+
+  useEffect(() => subscribeSound(setEnabled), [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.code === 'KeyM' && !event.repeat) setSoundEnabled(!soundEnabled())
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const toggle = useCallback(() => setSoundEnabled(!soundEnabled()), [])
+
+  return (
+    <button
+      type="button"
+      className="toggle"
+      onClick={toggle}
+      aria-pressed={enabled}
+      aria-label={enabled ? 'Sesi kapat' : 'Sesi ac'}
+      data-off={!enabled}
+    >
+      ses
+    </button>
+  )
 }
 
 function readSnapshot() {
@@ -63,6 +100,7 @@ export function Hud(): React.ReactElement {
         </div>
         <div className="controls">
           <span className="hint">W A S D</span>
+          <SoundToggle />
         </div>
       </div>
 

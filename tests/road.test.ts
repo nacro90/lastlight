@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sampleRoad, toWorld, toRoadSpace } from '@/core/road'
+import { ROAD_EDGE, offroadAmount, sampleRoad, toWorld, toRoadSpace } from '@/core/road'
 import { LIMITS, ROAD } from '@/core/config'
 import { hashString } from '@/core/rng'
 
@@ -162,6 +162,36 @@ describe('yol uzayi donusumu', () => {
         const planar = Math.hypot(world.x - road.x, world.z - road.z)
         expect(planar).toBeCloseTo(Math.abs(t), 6)
       }
+    }
+  })
+})
+
+describe('zemin orani', () => {
+  it('serit icinde sifir', () => {
+    for (const t of [0, 1.5, -3, ROAD.laneHalfWidth]) {
+      expect(offroadAmount(t)).toBe(0)
+    }
+  })
+
+  it('banketin yeterince otesinde tam bir', () => {
+    for (const t of [ROAD_EDGE + 2, -30, 120]) {
+      expect(offroadAmount(t)).toBe(1)
+    }
+  })
+
+  it('banket uzerinde ara degerde', () => {
+    const value = offroadAmount(ROAD.laneHalfWidth + ROAD.shoulderWidth * 0.5)
+    expect(value).toBeGreaterThan(0)
+    expect(value).toBeLessThan(1)
+  })
+
+  it('simetrik ve monoton', () => {
+    let previous = -1
+    for (let t = 0; t < 20; t += 0.1) {
+      const value = offroadAmount(t)
+      expect(value).toBeCloseTo(offroadAmount(-t), 12)
+      expect(value).toBeGreaterThanOrEqual(previous)
+      previous = value
     }
   })
 })

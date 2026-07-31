@@ -22,6 +22,18 @@ export function smoothstep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
+/**
+ * Ustel yumusatma: hedefe kare suresinden bagimsiz bir hizla yaklasir.
+ *
+ * Dogrusal karisim (`current += (target - current) * rate * dt`) kare suresine
+ * bagli; 60 Hz'te ve 144 Hz'te farkli hizda oturuyor ve buyuk dt'de hedefi
+ * asiyor. Ustel form bolunebilir oldugu icin iki yarim adim bir tam adima
+ * esit, yani kare hizi degisince duyulan veya gorulen bir fark olmuyor.
+ */
+export function approach(current: number, target: number, rate: number, dt: number): number {
+  return current + (target - current) * (1 - Math.exp(-rate * dt))
+}
+
 /** Hedefe dogru en fazla maxDelta kadar ilerler, hedefi asmaz. */
 export function moveToward(current: number, target: number, maxDelta: number): number {
   const delta = target - current

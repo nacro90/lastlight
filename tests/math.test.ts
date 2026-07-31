@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { clamp, clamp01, lerp, smoothstep, moveToward } from '@/core/math'
+import { approach, clamp, clamp01, lerp, smoothstep, moveToward } from '@/core/math'
 
 describe('clamp', () => {
   it('araliga sikistirir', () => {
@@ -65,5 +65,36 @@ describe('moveToward', () => {
   it('hedefi asmiyor', () => {
     expect(moveToward(9, 10, 5)).toBe(10)
     expect(moveToward(-9, -10, 5)).toBe(-10)
+  })
+})
+
+describe('approach', () => {
+  it('hedefe yaklasiyor, asmiyor', () => {
+    let value = 0
+    for (let i = 0; i < 200; i++) {
+      const next = approach(value, 10, 4, 1 / 60)
+      expect(next).toBeGreaterThan(value)
+      expect(next).toBeLessThanOrEqual(10)
+      value = next
+    }
+    expect(value).toBeCloseTo(10, 4)
+  })
+
+  it('kare suresinden bagimsiz', () => {
+    // Ustel yumusatma bolunebilir: iki yarim adim bir tam adima esit. Kare
+    // suresine bagli bir yumusatma, kare hizi degisince duyulur bir fark
+    // yaratıyor; bu ozellik onu engelliyor.
+    const single = approach(0, 1, 3, 0.2)
+    let split = 0
+    for (let i = 0; i < 10; i++) split = approach(split, 1, 3, 0.02)
+    expect(split).toBeCloseTo(single, 12)
+  })
+
+  it('sifir hizda deger degismiyor', () => {
+    expect(approach(3, 9, 0, 0.5)).toBe(3)
+  })
+
+  it('cok buyuk adimda patlamiyor', () => {
+    expect(approach(0, 5, 60, 10)).toBeCloseTo(5, 9)
   })
 })

@@ -238,6 +238,126 @@ test.describe('erisilebilirlik', () => {
   })
 })
 
+interface AudioInfo {
+  state: string
+  enabled: boolean
+  unlocked: boolean
+  level: number
+}
+
+/**
+ * Surus moduna gecis. Tusa kisa basmak yetmiyor: mod gecisi kare dongusunde
+ * degerlendiriliyor ve yazilim rasterizer'da kare araligi bir tus vurusundan
+ * uzun olabiliyor, yani basma tamamen iki kare arasina dusuyor. Tus, mod
+ * gerceklesene kadar basili tutuluyor.
+ */
+async function enterDriving(page: Page): Promise<void> {
+  await page.keyboard.down('ArrowUp')
+  await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'false')
+  await page.keyboard.up('ArrowUp')
+}
+
+/** Cikis seviyesi esigin ustune cikana (veya altina inene) kadar bekliyor. */
+async function waitForLevel(page: Page, threshold: number, above: boolean): Promise<void> {
+  await page.waitForFunction(
+    ({ limit, wantAbove }: { limit: number; wantAbove: boolean }) => {
+      const debug = (window as unknown as { __lastlight: { audioInfo: () => AudioInfo | null } })
+        .__lastlight
+      const level = debug.audioInfo()?.level
+      if (level === undefined) return false
+      return wantAbove ? level > limit : level < limit
+    },
+    { limit: threshold, wantAbove: above },
+    { timeout: 20_000 },
+  )
+}
+
+async function readAudio(page: Page): Promise<AudioInfo | null> {
+  return page.evaluate(() => {
+    const debug = (window as unknown as { __lastlight?: { audioInfo: () => AudioInfo | null } })
+      .__lastlight
+    if (!debug) throw new Error('__lastlight yok')
+    return debug.audioInfo()
+  })
+}
+
+test.describe('ses', () => {
+  test('ses baglami dokunulmadan askida, ilk tusla acılıyor', async ({ page }) => {
+    // Otomatik oynatma politikasi geregi askida basliyor, ve bunu bir kaplama
+    // ile degil ilk gercek dokunusla asiyoruz: sayfa sessiz ama tam calisir.
+    await page.goto('/')
+    await waitUntilRunning(page)
+
+    const before = await readAudio(page)
+    expect(before?.state).toBe('suspended')
+    expect(before?.unlocked).toBe(false)
+
+    await page.keyboard.press('KeyW')
+    await page.waitForFunction(
+      () => {
+        const debug = (window as unknown as { __lastlight: { audioInfo: () => AudioInfo | null } })
+          .__lastlight
+        return debug.audioInfo()?.state === 'running'
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+
+    const after = await readAudio(page)
+    expect(after?.unlocked).toBe(true)
+    expect(after?.enabled).toBe(true)
+  })
+
+  test('ses dugmesi tercihi degistiriyor ve hatirliyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await enterDriving(page)
+
+    const toggle = page.getByRole('button', { name: 'Sesi kapat' })
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+    await toggle.click()
+    await expect(page.getByRole('button', { name: 'Sesi ac' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect((await readAudio(page))?.enabled).toBe(false)
+
+    // Tercih kaliciysa yenilemeden sonra da kapali geliyor.
+    await page.reload()
+    await waitUntilRunning(page)
+    await enterDriving(page)
+    expect((await readAudio(page))?.enabled).toBe(false)
+  })
+
+  test('M tusu sesi kapatip aciyor', async ({ page }) => {
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await page.keyboard.press('KeyW')
+
+    await page.keyboard.press('KeyM')
+    expect((await readAudio(page))?.enabled).toBe(false)
+    await page.keyboard.press('KeyM')
+    expect((await readAudio(page))?.enabled).toBe(true)
+  })
+
+  test('ses gercekten uretiliyor ve kapatinca susuyor', async ({ page }) => {
+    // Baglamin "running" olmasi kanit degil: kazanclari sifirda kalmis bir graf
+    // da running gorunuyor. Olcut cikisin RMS seviyesi.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await enterDriving(page)
+
+    await waitForLevel(page, 0.002, true)
+
+    await page.keyboard.press('KeyM')
+    await waitForLevel(page, 0.0005, false)
+
+    await page.keyboard.press('KeyM')
+    await waitForLevel(page, 0.002, true)
+  })
+})
+
 test.describe('gorsel kayit', () => {
   test('ekran goruntusu aliniyor', async ({ page }) => {
     await page.goto('/')

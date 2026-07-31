@@ -254,8 +254,10 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 
 ### Gün 3: cila ve kanıt
 
-- [ ] `audio/graph` + kilit açma rampası
-- [ ] `audio/layers`: rüzgar, lastik, motor, ped (ped için kaçış kapısı açık)
+- [x] `core/audio`: karışım modelinin saf hali (kazançlar, filtre frekansları, sahte vites kutusu)
+- [x] `audio/engine` + kilit açma rampası, sekme arkaya alınınca susma
+- [x] Dört katman: rüzgar, lastik, motor, ped (hepsi kaldı, ped cılız çıkmadı)
+- [x] Ses düğmesi: `aria-pressed`, M kısayolu, tercih `localStorage`'da
 - [ ] Font subset'leri, `ui/tokens.css`
 - [ ] `ui/TitleCard`, `ui/Hud` (tabular hız, 8 Hz throttle), `ui/Settings` (in-world liste)
 - [ ] Erişilebilirlik geçişi: reduced motion, klavye gezinme, odak halkaları, aria, kontrast

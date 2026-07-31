@@ -13,6 +13,7 @@
  */
 
 import { fbm1D } from './noise'
+import { smoothstep } from './math'
 import { LIMITS, ROAD } from './config'
 
 /** Bir value noise oktavinin egim ve egrilik ust sinirlari (quintic fade). */
@@ -188,3 +189,18 @@ export function toRoadSpace(seed: number, x: number, z: number): { s: number; t:
 
 /** Yolun toplam yari genisligi (asfalt + banket). */
 export const ROAD_EDGE = ROAD.laneHalfWidth + ROAD.shoulderWidth
+
+/** Arazi orani banketin bittigi yerden bu kadar sonra tamamlaniyor (metre). */
+const OFFROAD_FULL_MARGIN = 1.5
+
+/**
+ * Yanal sapmadan zemin orani: 0 asfalt, 1 tam arazi. Banket gecis bolgesi,
+ * yani teker yol kenarini asarken deger yumusak yukseliyor.
+ *
+ * Hem fizik (yuvarlanma direnci) hem ses (lastik tinisi) ayni degeri
+ * kullaniyor; iki yerde ayri esik olsa arac cakila girerken ses ile his
+ * ayrisiyordu.
+ */
+export function offroadAmount(t: number): number {
+  return smoothstep(ROAD.laneHalfWidth, ROAD_EDGE + OFFROAD_FULL_MARGIN, Math.abs(t))
+}

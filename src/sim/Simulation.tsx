@@ -9,12 +9,11 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 
-import { ROAD } from '@/core/config'
 import { sampleContact, type SurfaceContact } from '@/core/contact'
 import { FIXED_STEP, createStepper } from '@/core/loop'
 import { createAutopilot } from '@/core/autopilot'
-import { clamp, smoothstep } from '@/core/math'
-import { ROAD_EDGE, sampleRoad, toRoadSpace } from '@/core/road'
+import { approach, clamp } from '@/core/math'
+import { offroadAmount, sampleRoad, toRoadSpace } from '@/core/road'
 import {
   VEHICLE,
   createVehicleState,
@@ -23,7 +22,7 @@ import {
   type VehicleState,
 } from '@/core/vehicle'
 import { createKeyboardSource } from '@/input/keyboard'
-import { IDLE_RETURN_MS, SEED, car, runtime } from './state'
+import { IDLE_RETURN_MS, SEED, car, control, runtime } from './state'
 
 /**
  * Yanal ivmeden govde yalpasi. Katsayi kucuk gorunuyor ama carptigi sey
@@ -114,6 +113,10 @@ export function Simulation(): null {
       prior = state
       state = stepVehicle(state, input, FIXED_STEP, { grade, rollingScale: surfaceScale })
       acceleration.current = (state.speed - prior.speed) / FIXED_STEP
+
+      control.throttle = input.throttle
+      control.brake = input.brake
+      control.steer = input.steer
     }
 
     vehicle.current = state
@@ -135,15 +138,11 @@ export function Simulation(): null {
       HALF_TRACK,
     )
     contact.current = surface
-    rollingScale.current =
-      1 +
-      (OFFROAD_ROLLING_SCALE - 1) *
-        smoothstep(ROAD.laneHalfWidth, ROAD_EDGE + 1.5, Math.abs(road.t))
+    rollingScale.current = 1 + (OFFROAD_ROLLING_SCALE - 1) * offroadAmount(road.t)
 
     // Kasa araziye oturuyor: tekerler bu duzlemde kaliyor.
-    const chassisBlend = 1 - Math.exp(-POSE_SMOOTHING * delta)
-    smoothedPitch.current += (surface.pitch - smoothedPitch.current) * chassisBlend
-    smoothedRoll.current += (surface.roll - smoothedRoll.current) * chassisBlend
+    smoothedPitch.current = approach(smoothedPitch.current, surface.pitch, POSE_SMOOTHING, delta)
+    smoothedRoll.current = approach(smoothedRoll.current, surface.roll, POSE_SMOOTHING, delta)
 
     // Govde kasanin uzerinde birkac derece oynuyor: viraj yalpasi ve dalma.
     // Bunlar tekerleri etkilemiyor, o yuzden teker havada kalmiyor.
@@ -160,9 +159,18 @@ export function Simulation(): null {
       MAX_BODY_PITCH,
     )
 
-    const bodyBlend = 1 - Math.exp(-BODY_SMOOTHING * delta)
-    smoothedBodyRoll.current += (targetBodyRoll - smoothedBodyRoll.current) * bodyBlend
-    smoothedBodyPitch.current += (targetBodyPitch - smoothedBodyPitch.current) * bodyBlend
+    smoothedBodyRoll.current = approach(
+      smoothedBodyRoll.current,
+      targetBodyRoll,
+      BODY_SMOOTHING,
+      delta,
+    )
+    smoothedBodyPitch.current = approach(
+      smoothedBodyPitch.current,
+      targetBodyPitch,
+      BODY_SMOOTHING,
+      delta,
+    )
 
     car.x = rendered.x
     car.z = rendered.z

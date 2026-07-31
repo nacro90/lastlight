@@ -50,6 +50,17 @@ export const car: CarPose = {
   yawRate: 0,
 }
 
+/**
+ * Son karede uygulanan surus girdisi. Ses karisimi bunu okuyor: gaz kesikken
+ * motorun geri cekilmesi hizdan degil gazdan okunuyor, ve girdiyi klavyenin mi
+ * otopilotun mu urettigi ses tarafinda farksiz.
+ */
+export const control = {
+  throttle: 0,
+  brake: 0,
+  steer: 0,
+}
+
 export const perf = {
   fps: 0,
   frameMs: 0,
