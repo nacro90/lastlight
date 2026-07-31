@@ -38,6 +38,27 @@ test('inspect', async ({ page }) => {
     let meshCount = 0
     let visibleMeshes = 0
     const lines: string[] = []
+    const dustLines: string[] = []
+
+    scene.traverse((object) => {
+      if (object.type !== 'Points') return
+      const geometry = object.geometry as {
+        attributes?: Record<string, { count: number; array: ArrayLike<number> }>
+      }
+      const material = object.material as {
+        visible?: boolean
+        uniforms?: Record<string, { value: unknown }>
+      }
+      const uniforms = material.uniforms ?? {}
+      const center = uniforms.uCenter?.value as { x: number; y: number; z: number } | undefined
+      const sizes = geometry.attributes?.size
+      dustLines.push(
+        `toz: gorunur=${object.visible} nokta=${geometry.attributes?.position?.count ?? 0} ` +
+          `olcek=${(uniforms.uPixelScale?.value as number | undefined)?.toFixed(0) ?? '-'} ` +
+          `merkez=(${center ? center.x.toFixed(1) : '-'},${center ? center.y.toFixed(1) : '-'},${center ? center.z.toFixed(1) : '-'}) ` +
+          `boyut0=${sizes ? (sizes.array[0] as number).toFixed(3) : '-'}`,
+      )
+    })
 
     scene.traverse((object) => {
       if (object.type !== 'Mesh') return
@@ -76,11 +97,21 @@ test('inspect', async ({ page }) => {
       }
     })
 
+    const canvas = document.querySelector('canvas')
+    const gl = canvas
+      ? ((canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as WebGLRenderingContext | null)
+      : null
+    const pointRange = gl
+      ? (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array | number[])
+      : null
+
     return [
+      `nokta boyut araligi=${pointRange ? `${pointRange[0]}..${pointRange[1]}` : 'bilinmiyor'}`,
       `mesh toplam=${meshCount} gorunur=${visibleMeshes}`,
       `kamera=(${camera.position.x.toFixed(1)},${camera.position.y.toFixed(1)},${camera.position.z.toFixed(1)}) fov=${camera.fov.toFixed(1)} far=${camera.far}`,
       `arac=(${car.x!.toFixed(1)},${car.y!.toFixed(1)},${car.z!.toFixed(1)}) s=${car.s!.toFixed(1)} t=${car.t!.toFixed(2)} hiz=${car.speed!.toFixed(1)}`,
       `perf draw=${perf.drawCalls} tri=${perf.triangles} fps=${perf.fps!.toFixed(1)}`,
+      ...dustLines,
       ...wheelReport,
       ...lines,
     ].join('\n')

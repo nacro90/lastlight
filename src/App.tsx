@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { Atmosphere } from '@/scene/Atmosphere'
 import { Car } from '@/scene/Car'
 import { ContactShadow } from '@/scene/ContactShadow'
+import { Dust } from '@/scene/Dust'
 import { DebugBridge } from '@/scene/DebugBridge'
 import { ChaseCamera } from '@/scene/ChaseCamera'
 import { Effects } from '@/scene/Effects'
@@ -34,6 +35,7 @@ function Scene(): React.ReactElement {
       <Scatter />
       <Car />
       <ContactShadow />
+      <Dust />
       <ChaseCamera />
       <PerfProbe />
       <Effects />
