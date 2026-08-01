@@ -39,8 +39,15 @@
   --paper: #f5efe6;
   --night: #1b1033;
 
+  /* Metin opakliklari olcumle secildi. Alt bantta en acik sahne degeri
+     (176,158,137) olculdu ve buna karsi tam opak kirik beyaz bile 2.27:1
+     veriyor, yani opaklikla 4.5:1 tutmak imkansiz. Cozum metni parlatmak degil,
+     metnin altina koyulastirma koymak (bkz. .cluster::before); bu iki deger o
+     koyulastirmanin uzerinde 4.5:1'i geciyor ve e2e testi bunu olcuyor. Hiz
+     gostergesi koyulastirma olmadan da tutuyor, olculdu. */
   --hud-strong: rgba(245, 239, 230, 0.92);
-  --hud-muted: rgba(245, 239, 230, 0.58);
+  --hud-second: rgba(245, 239, 230, 0.75);
+  /* Sadece ayirici cizgiler: metin tasimiyor. */
   --hud-faint: rgba(245, 239, 230, 0.34);
   --hud-shadow: 0 1px 12px rgba(12, 8, 22, 0.65);
 
@@ -82,15 +89,39 @@ canvas {
   position: fixed;
   inset: auto auto 0 0;
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
+  gap: 1.4rem;
   padding: 0 var(--side-gutter) var(--bottom-band);
   pointer-events: none;
   user-select: none;
 }
 
+/* Surus ipucu: bir kez gelip cekiliyor, sonra ekranda sadece hiz kaliyor. */
+.hint--drive {
+  transition: opacity 900ms ease;
+}
+
+.hint--drive[data-hidden='true'] {
+  opacity: 0;
+}
+
 /* Kontrol kumesi: hiz ile ayni bantta ama karsi ucta. Ayri kapsayici olmasinin
    sebebi ikisinin ayri gorunurluk kurallari olmasi; hiz sadece surerken,
    kontroller kullanici niyetiyle. */
+/* Kontrol kumesi ve altindaki koyulastirma.
+ *
+ * Koyulastirma once butun alt banda yayilmisti, sonra olculdu ve iki sey
+ * ortaya cikti. Birincisi hiz gostergesi buna hic ihtiyac duymuyor: takip
+ * kamerasinin geometrisi geregi her zaman aracin hemen arkasindaki koyu
+ * asfaltin uzerinde duruyor ve en kotu zeminde bile 9.6:1 veriyor. Ikincisi
+ * kume sinematik cekimlerde acik araziye denk gelebiliyor ve koyulastirma
+ * olmadan kontrast 2.39'a iniyor.
+ *
+ * Guclu ve lokal olmasi da olcumden geliyor: sahneye gore ayarlanan yumusak bir
+ * koyulastirma bazi karelerde yetiyor bazilarinda yetmiyordu, yani garanti
+ * sallantida kaliyordu. Bu deger metnin durdugu yerde herhangi bir zemine, en
+ * uctaki beyaza karsi bile dort bucugu tutuyor. Kose ankrajli radyal gradyan
+ * oldugu icin sert kenari yok: plaka gibi degil golge gibi okunuyor. */
 .cluster {
   position: fixed;
   inset: auto 0 0 auto;
@@ -102,24 +133,57 @@ canvas {
   pointer-events: none;
   user-select: none;
   transition: opacity 700ms ease;
+  /* Kendi yigin baglamini kuruyor: koyulastirma (::before, z-index -1) boylece
+     kumenin icinde kaliyor. Yigin baglami olmadan negatif z-index onu kok
+     baglamina tasiyor ve canvas'in arkasina dusuyor, yani gorunmez oluyor. */
+  isolation: isolate;
+}
+
+.cluster::before {
+  content: '';
+  position: absolute;
+  inset: -1.6rem -1.1rem -0.7rem -3.2rem;
+  background: radial-gradient(
+    130% 150% at 88% 100%,
+    rgba(12, 8, 22, 0.82) 0%,
+    rgba(12, 8, 22, 0.74) 42%,
+    rgba(12, 8, 22, 0) 100%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 .cluster[data-hidden='true'] {
   opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 700ms ease,
-    visibility 0s linear 700ms;
+  pointer-events: none;
 }
 
-/* Ayarlar modal degil: arkasinda perde yok, dunya akmaya devam ediyor. Ince
-   bir ayirici ve hafif bir koyulastirma okunurlugu tasiyor. */
+/* Gizliyken de sekmeyle ulasilabiliyor, ama odak gelince kume gorunur oluyor.
+   visibility: hidden kullanmak daha temiz gorunuyordu ama gorunmez bir ogeye
+   odak da gitmiyor: klavyeyle gezen biri ayarlara hic ulasamiyordu. Simdi
+   dugme odaga geldigi an kume aciliyor, ve odak icindeyken hicbir zaman
+   kaybolmuyor. */
+.cluster[data-hidden='true']:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Ayarlar modal degil: arkasinda perde yok, dunya akmaya devam ediyor, sadece
+   liste alt bantta aciliyor.
+ *
+ * Panelin kendi zemini var ve bu olcumden geliyor. Kose ankrajli koyulastirma
+ * iki dugme icin yetiyor ama panel metni bandin epey uzerine ve soluna
+ * yayiliyor; orada olculen kontrast 1.84'e kadar dusuyordu. Sanat yonu arayuzun
+ * plaka gibi durmamasini istiyor, ama erisilebilirlik maddesi pazarlik konusu
+ * degil ve ikisi carpistiginda garanti kazaniyor. Panel sadece acikken var,
+ * yani surus ve sinematik cerceve etkilenmiyor. */
 .settings {
   display: grid;
   gap: 0.55rem;
   min-width: min(19rem, 76vw);
-  padding: 0.85rem 0 0.1rem;
-  border-top: 1px solid rgba(245, 239, 230, 0.14);
+  padding: 0.9rem 1rem;
+  background: linear-gradient(to top, rgba(12, 8, 22, 0.84), rgba(12, 8, 22, 0.76));
+  border-radius: 10px;
   pointer-events: auto;
   text-shadow: var(--hud-shadow);
 }
@@ -136,7 +200,7 @@ canvas {
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--hud-faint);
+  color: var(--hud-second);
 }
 
 .settings__value {
@@ -147,7 +211,7 @@ canvas {
 
 .settings__value--plain {
   font-size: 0.78rem;
-  color: var(--hud-muted);
+  color: var(--hud-strong);
 }
 
 .settings__value--num {
@@ -167,7 +231,7 @@ canvas {
   background: none;
   font: inherit;
   font-size: 0.78rem;
-  color: var(--hud-faint);
+  color: var(--hud-second);
   cursor: pointer;
   pointer-events: auto;
   transition: color 200ms ease;
@@ -227,7 +291,7 @@ canvas {
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--hud-muted);
+  color: var(--hud-second);
 }
 
 .controls {
@@ -242,7 +306,7 @@ canvas {
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--hud-faint);
+  color: var(--hud-second);
 }
 
 /* Dugme metnin kendisi gibi duruyor: cerceve yok, dolgu yok, renk yok. Kapali
@@ -258,7 +322,7 @@ canvas {
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--hud-muted);
+  color: var(--hud-second);
   cursor: pointer;
   pointer-events: auto;
   transition: color 200ms ease;
@@ -269,7 +333,7 @@ canvas {
 }
 
 .toggle[data-off='true'] {
-  color: var(--hud-faint);
+  color: var(--hud-second);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }

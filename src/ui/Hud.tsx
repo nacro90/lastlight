@@ -4,12 +4,19 @@
  * Kare basina degeri React state'ine yazmiyoruz. Hiz saniyede sekiz kez
  * ornekleniyor; her karede yazmak her karede reconciliation demek olurdu.
  *
- * Kontrol kumesi (ses, ayarlar) sinematik modda gizli ama olu degil: fare
- * kimildandiginda, tusa basildiginda veya ekrana dokunuldugunda geliyor, birkac
- * saniye sonra cekiliyor. Sebebi bir zorunluluk: dokunmatik cihazda deneyim hep
- * sinematik modda kaliyor, yani kume hic gorunmezse o cihazda sesi kapatmak
- * veya kaliteyi degistirmek imkansiz olurdu. Kullanici niyetiyle gelen bir
- * kume, dikkat cekmek icin nabiz atan bir oge ile ayni sey degil.
+ * Kontrol kumesi (ses, ayarlar) isaretleyici niyetiyle geliyor: fare
+ * kimildandiginda veya ekrana dokunuldugunda gorunuyor, birkac saniye sonra
+ * cekiliyor. Klavye kume gostermiyor, cunku klavye surus demek ve surerken
+ * ekranda sadece hiz olmasi gerekiyor; tusa basmak kumeyi getirse yon degistiren
+ * herkes kalici bir arayuz tasiyordu.
+ *
+ * Kumenin hic gorunmemesi de olmuyor: dokunmatik cihazda deneyim hep sinematik
+ * modda kaliyor ve kume gorunmezse o cihazda sesi kapatmak imkansiz oluyor.
+ * Isaretleyici niyetiyle gelen bir kume, dikkat cekmek icin nabiz atan bir oge
+ * ile ayni sey degil.
+ *
+ * Klavye kontrol ipucu surus baslarken bir kez gosterilip cekiliyor; kalici
+ * durursa ekranda hizdan baska bir sey olmus oluyor.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,8 +35,10 @@ import { SEED_NAME, car, perf, runtime } from '@/sim/state'
 const SAMPLE_INTERVAL_MS = 125
 const TITLE_DURATION_MS = 5200
 const FRAME_BUDGET_MS = 16.6
-/** Kontrol kumesi son etkilesimden bu kadar sonra cekiliyor. */
+/** Kontrol kumesi son isaretleyici hareketinden bu kadar sonra cekiliyor. */
 const CONTROL_LINGER_MS = 3500
+/** Klavye ipucu surus baslangicindan bu kadar sonra cekiliyor. */
+const HINT_DURATION_MS = 7000
 
 const TIER_LABELS: Record<QualityTier, string> = {
   low: 'düşük',
@@ -48,8 +57,13 @@ function useSampled<T>(read: () => T, intervalMs = SAMPLE_INTERVAL_MS): T {
   return value
 }
 
-/** Son etkilesimden beri gecen sure esigin altinda mi. */
-function useRecentActivity(): boolean {
+/**
+ * Son isaretleyici hareketinden beri gecen sure esigin altinda mi.
+ *
+ * Klavye burada yok ve bu kasitli: klavye surus demek, ve surerken ekranda
+ * sadece hiz olmasi gerekiyor.
+ */
+function useRecentPointer(): boolean {
   const [active, setActive] = useState(true)
 
   useEffect(() => {
@@ -64,17 +78,31 @@ function useRecentActivity(): boolean {
     wake()
     window.addEventListener('pointermove', wake)
     window.addEventListener('pointerdown', wake)
-    window.addEventListener('keydown', wake)
 
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener('pointermove', wake)
       window.removeEventListener('pointerdown', wake)
-      window.removeEventListener('keydown', wake)
     }
   }, [])
 
   return active
+}
+
+/** Surus modu basladiktan sonra kisa bir sure dogru kaliyor. */
+function useDrivingHint(driving: boolean): boolean {
+  const [visible, setVisible] = useState(false)
+  const shown = useRef(false)
+
+  useEffect(() => {
+    if (!driving || shown.current) return
+    shown.current = true
+    setVisible(true)
+    const timer = window.setTimeout(() => setVisible(false), HINT_DURATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [driving])
+
+  return visible
 }
 
 function readSnapshot() {
@@ -205,7 +233,7 @@ export function Hud(): React.ReactElement {
   const [titleVisible, setTitleVisible] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsButton = useRef<HTMLButtonElement>(null)
-  const active = useRecentActivity()
+  const pointerActive = useRecentPointer()
 
   useEffect(() => {
     const timer = window.setTimeout(() => setTitleVisible(false), TITLE_DURATION_MS)
@@ -228,7 +256,8 @@ export function Hud(): React.ReactElement {
   }, [settingsOpen, close])
 
   const driving = snapshot.mode === 'driving'
-  const controlsVisible = driving || active || settingsOpen
+  const hintVisible = useDrivingHint(driving)
+  const controlsVisible = pointerActive || settingsOpen
 
   return (
     <>
@@ -246,15 +275,19 @@ export function Hud(): React.ReactElement {
           <span className="speed__value">{snapshot.speedKmh}</span>
           <span className="speed__unit">km/h</span>
         </div>
+        {/* Ipucu surus baslarken bir kez geliyor ve cekiliyor. */}
+        <span className="hint hint--drive" data-hidden={!hintVisible}>
+          W A S D
+        </span>
       </div>
 
       <div className="cluster" data-hidden={!controlsVisible}>
         {settingsOpen ? <Settings distanceKm={snapshot.distanceKm} onClose={close} /> : null}
 
         <div className="controls">
-          <span className="hint">
-            {touchOnly ? 'klavyeli bir cihazda sürebilirsin' : 'W A S D'}
-          </span>
+          {/* Dokunmatik cihazda surus yok; kume acildiginda soylenmesi gereken
+              tek sey bu. Klavyeli cihazda ipucu alt bantta zaten gosterildi. */}
+          {touchOnly ? <span className="hint">klavyeli bir cihazda sürebilirsin</span> : null}
           <SoundToggle />
           <button
             ref={settingsButton}

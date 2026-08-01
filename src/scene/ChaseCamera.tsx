@@ -14,6 +14,13 @@
  * sonrasina uygulanirsa alcak cekimlerde kamera her karede zemine kilitlenip
  * gorunur bir titreme uretiyor.
  *
+ * Bakis mesafesi ve gorus acisi da yumusatiliyor, ve bunun sebebi devir teslim.
+ * Konum zaten yayla geliyordu ama bakis noktasi ve gorus acisi mod degisiminde
+ * tek karede siciriyordu: onden geri giden cekim etkinken tusa basildiginda
+ * bakis yonu bir karede yaklasik yuz seksen derece donuyor, tepeden vinc
+ * cekiminde ise gorus acisi kirk dortten elli bese atliyor. Ikisi de sakin bir
+ * deneyimde gorunur bir pop.
+ *
  * Kamera sarsintisi yok, sarsinti bu projenin duygusuna aykiri.
  */
 
@@ -26,6 +33,7 @@ import {
   REDUCED_MOTION_CUT_DURATION,
   createCinematic,
 } from '@/core/cinematic'
+import { approach } from '@/core/math'
 import { terrainHeightAtWorld } from '@/core/terrain'
 import { SEED, car, runtime } from '@/sim/state'
 
@@ -40,6 +48,14 @@ const LOOK_HEIGHT = 1.5
 
 const DRIVING_FOV = 52
 const FOV_PER_SPEED = 0.14
+
+/**
+ * Bakis mesafesi ve gorus acisinin hedefe yetisme hizi (1/s). Bes, yaklasik
+ * alti yuz milisaniyede oturmak demek: kilitlenen karar da devir teslim icin
+ * bunu soyluyor. Normal surus ve sinematik kesme sirasinda hedefler zaten yavas
+ * degistigi icin bu yumusatma gorunmuyor; sadece mod degisiminde is yapiyor.
+ */
+const HANDOVER_RATE = 5
 
 /** Cekim icindeki surunme frekanslari; ucu farkli ki hareket dongu gibi durmasin. */
 const DRIFT_RATE_BACK = 0.55
@@ -56,6 +72,8 @@ function prefersReducedMotion(): boolean {
 export function ChaseCamera(): null {
   const { camera } = useThree()
   const lookTarget = useRef(new THREE.Vector3())
+  const smoothedLookAhead = useRef(LOOK_AHEAD_BASE)
+  const smoothedFov = useRef(DRIVING_FOV)
 
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion)
 
@@ -110,15 +128,30 @@ export function ChaseCamera(): null {
     camera.position.y += (desiredY - camera.position.y) * blend
     camera.position.z += (desiredZ - camera.position.z) * blend
 
+    // Bakis mesafesi olcek olarak yumusatiliyor, dunya noktasi olarak degil:
+    // dunya noktasini yumusatmak arac donerken bakis noktasini geride
+    // birakiyor ve kamera viraj boyunca yolun disina bakiyor.
+    smoothedLookAhead.current = approach(
+      smoothedLookAhead.current,
+      lookAhead,
+      HANDOVER_RATE,
+      delta,
+    )
+    const smoothLookAhead = smoothedLookAhead.current
+
     lookTarget.current.set(
-      car.x + forwardX * lookAhead,
+      car.x + forwardX * smoothLookAhead,
       car.y + LOOK_HEIGHT,
-      car.z + forwardZ * lookAhead,
+      car.z + forwardZ * smoothLookAhead,
     )
     camera.lookAt(lookTarget.current)
 
-    if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.fov - fov) > 0.02) {
-      camera.fov = fov
+    smoothedFov.current = approach(smoothedFov.current, fov, HANDOVER_RATE, delta)
+    if (
+      camera instanceof THREE.PerspectiveCamera &&
+      Math.abs(camera.fov - smoothedFov.current) > 0.02
+    ) {
+      camera.fov = smoothedFov.current
       camera.updateProjectionMatrix()
     }
   })

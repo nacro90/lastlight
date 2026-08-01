@@ -61,6 +61,12 @@ export const LIMITS = {
    * Maksimum egim. Bu bir ust sinir, hedef degil: fBm turev sinirina nadiren
    * yaklastigi icin gercekte olculen egim bunun yarisi civarinda kaliyor.
    */
+  /**
+   * Ust egim siniri. Plan yuzde sekiz diyordu ve yuzde ona cikarildi: yuzde
+   * sekizde tepe ve vadi hissi neredeyse kayboluyor, yol duz bir seride
+   * donuyordu. Yuzde on hala gercek bir yolun kabul edilebilir egimi ve
+   * kamera/arac dinamikleri bunu sorunsuz tasiyor.
+   */
   maxGrade: 0.1,
   /** Maksimum sapma acisi (radyan). Gunesin onde kalmasini garanti ediyor. */
   maxHeading: (28 * Math.PI) / 180,

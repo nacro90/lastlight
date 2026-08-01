@@ -28,7 +28,7 @@ Aşağıdaki on iki karar sorgulanarak alındı ve kapalı. Uygulama sırasında
 2. **Dünya yol uzayında üretiliyor.** Her arazi vertex'i `(s, t)` ile tanımlı: `s` yol boyunca mesafe, `t` yandan sapma. Yükseklik `t` küçükken yol yüksekliğine, büyüdükçe gürültüye smoothstep ile karışıyor. Bu, "en yakın spline noktası" problemini tamamen ortadan kaldırıyor, LOD'u ve streaming'i bedavaya veriyor. Koridor iki yana 250 m. Açık dünya yok, özgürlük hissi yeterli.
 3. **Üretim ana thread'de, üç disiplinle.** Amortisman (kare başına en fazla bir dilim, dilim 25 m), havuzlama (sabit 40 mesh, halka tampon, vertex tamponu yerinde güncelleniyor, sıfır tahsis), saflık (üretim fonksiyonu three.js tanımıyor). Worker'a geçiş mekanik bir iş olarak kapıda bekliyor.
 4. **Sıfır doku, sıfır indirilen model.** Prosedürel geometri ve vertex renkleri. Gerekçe: ters ışıkta form görünür detay görünmez, asset boru hattı yarım gün yer, ve küçük bundle ilk boyanmayı kurtarır. Araç da prosedürel, ama ayrı bileşen arkasında (sonra GLB takılabilir).
-5. **Mobilde oyun değil sinematik.** Dokunmatik cihazda araç kendi sürüyor, parmak kamerayı hafifçe döndürüyor, kalite profili düşük. Auto-drive zaten yazıldığı için maliyeti sıfıra yakın.
+5. **Mobilde oyun değil sinematik.** Dokunmatik cihazda araç kendi sürüyor, kamera sabit (parmakla kamera döndürme denendi ve kesildi), kalite profili düşük. Auto-drive zaten yazıldığı için maliyeti sıfıra yakın.
 6. **Bütün ses prosedürel, tek byte inmiyor.** Web Audio ile rüzgar, lastik, motor, ortam pedi. Açılışta kapı yok: sinematik sessiz başlıyor, ilk etkileşimde ses iki saniyede süzülüyor. Ses ikonu sabit duruyor, nabız atmıyor.
 7. **Kamera üç parçalı.** Sinematik mod (dört çerçeveleme, 8-10 sn'de yumuşak kesme), devir teslim (tuşa dokununca 0.6 sn'de takip kamerasına), boşta kalma dönüşü (25 sn dokunulmazsa sinematik geri alıyor). Takip kamerası yaylı, ileri bakış kaymalı, hıza bağlı FOV. Kamera sarsıntısı yok, kokpit görüşü yok.
 8. **Kalite kademesi sinematik pencerede ölçülüp kilitleniyor.** İlk üç saniyede kare süresi ortalaması alınıyor, kademe seçiliyor, oyuncu kontrolü almadan sahne ona göre ayarlanmış oluyor. Oyun ortasında dinamik değişim yok (pop görünür olur). Seçim `localStorage`'da, ayarlardan elle geçersiz kılınabiliyor.
@@ -124,7 +124,9 @@ Arayüzde sıcak renk kullanılmıyor. Sahne zaten turuncu; arayüz de turuncu o
 
 ### Signature
 
-Arayüz sahnenin üstünde çıkartma gibi durmuyor, ışığın içine kazınmış gibi duruyor. Birim etiketleri ve ince ayırıcılar `mix-blend-mode` ile arkadaki sıcaklığı alıyor. Ama hız rakamı ve ayar metinleri düz `--paper` artı yumuşak gölge kalıyor, çünkü okunurluk blend moduna emanet edilemez. Yani risk bir yerde alınıyor, kritik metin korunuyor.
+Arayüz sahnenin üstünde çıkartma gibi durmuyor, ışığın içine kazınmış gibi duruyor: hız rakamı ve ayar metinleri düz `--paper` artı yumuşak gölge.
+
+**`mix-blend-mode` riski alınmadı ve sebebi başka bir kuralla çakışması.** Birim etiketlerinin blend ile arkadaki sıcaklığı almasını planlamıştık; ama bu, arayüze sahnenin turuncusunu sokmak demek ve "arayüzde renk yok" kuralı daha güçlü. İkisi çakıştığında renk kuralı kazandı, risk alınmadı. Yerine alınan risk kontrol kümesinin kullanıcı niyetiyle gelip gitmesi oldu.
 
 Ayarlar bir modal değil. Dünya arkada akmaya devam ederken alt bantta bir liste açılıyor. Hem daha ucuz hem daha az kesintili; deneyim hiç durmuyor.
 
@@ -142,12 +144,14 @@ Dört katman, hepsi osilatör ve gürültü, sıfır dosya:
 
 | Katman | Yapı | Modülasyon |
 |---|---|---|
-| Rüzgar | beyaz gürültü + alçak geçiren | kesim frekansı ve kazanç hıza bağlı |
+| Rüzgar | pembe gürültü + alçak geçiren | kesim frekansı ve kazanç hıza bağlı |
 | Lastik | pembe gürültü + bant geçiren | hıza bağlı kazanç, zemine bağlı parlaklık |
-| Motor | 3 detune testere dişi + alçak geçiren | perde devire bağlı, gaz kazancı |
+| Motor | 3 detune üçgen dalga + alçak geçiren | perde devire bağlı, gaz kazancı |
 | Ortam pedi | 3 sinüs beşli aralıkta | çok yavaş LFO, kazanç ve filtre |
 
 Kilit açma: `AudioContext` suspended başlıyor, ilk `pointerdown` veya `keydown` ile resume ediliyor, master kazanç 2 sn'de rampa ile yükseliyor.
+
+İki sapma ölçümle geldi. Rüzgar için beyaz gürültü planlanmıştı ama kulak onu hemen dijital duyuyor; tek bir pembe gürültü tamponu hem rüzgar hem lastik zincirini besliyor. Motor için testere dişi planlanmıştı ve sert duyuldu: harmonikleri 1/n ile azalıyor, yani üst taraf dolu. Üçgen dalganın harmonikleri 1/n² ile azalıyor ve sadece tek harmonikleri var; aynı perde, çok daha yumuşak ton.
 
 **Kaçış kapısı:** ped bir saat sonunda cılız duyulursa tamamen atılıyor. Rüzgar ve lastik kalıyor, bu da meşru bir estetik. Rüzgar ve lastik prosedürel olmak zorunda çünkü hıza tepki vermeleri gerekiyor.
 
@@ -162,20 +166,28 @@ Kilit açma: `AudioContext` suspended başlıyor, ilk `pointerdown` veya `keydow
 | Kare süresi | < 16.6 ms (hedef), < 20 ms (kabul) |
 | Piksel oranı | masaüstü ≤ 1.5, mobil = 1.0 |
 | Bloom çözünürlüğü | yarım |
-| Dilim | 25 m, havuzda 40 tane (1 km koridor) |
+| Dilim | 25 m, havuzda 48 tane (1.2 km koridor) |
 | İlk boyanma | < 1.5 s |
 
-Kademeler:
+Kademeler (uygulanan hâli, `src/core/quality.ts`):
 
 | | Yüksek | Orta | Düşük / mobil |
 |---|---|---|---|
-| Sis (yakın/uzak) | 60 / 380 m | 50 / 300 m | 40 / 220 m |
-| Gölge haritası | 2048 | 1024 | kapalı |
-| Bitki yoğunluğu | %100 | %55 | %30 |
-| Post zinciri | bloom + vinyet + grain | bloom + vinyet | bloom |
 | Piksel oranı | 1.5 | 1.25 | 1.0 |
+| Gölge haritası | 4096 | 2048 | 1024 |
+| Bitki yoğunluğu | %100 | %80 | %55 |
+| Toz yoğunluğu | %100 | %60 | %30 |
+| Post zinciri | bloom + vinyet | bloom + vinyet | bloom + vinyet |
 
-Ölçüm: Brave üzerinden `web-perf`, CPU 4x yavaşlatma ile zayıf cihaz taklidi. GPU taklit edilemiyor, o yüzden GPU bütçesi muhafazakar.
+Bu tablo planın ilk hâlinden üç noktada ayrıldı ve üçü de kasıtlı:
+
+**Gölge hiçbir kademede kapanmıyor.** Alçak güneşte gölge sadece bir efekt değil, aracın yere değdiğini okutan tek şey (temas gölgesi maddesine bakın). Kapatmak aracı havada bırakıyor. Onun yerine harita çözünürlüğü iniyor. Taban değer 2048 değil 4096, çünkü sıyırtan ışıkta 105 metrelik frustumda 2048 gözle görünür basamak veriyordu.
+
+**Sis kademeye bağlı değil.** Kesilen şeyin çözünürlük ve yoğunluk olması, imza görünümün değil, bu projenin kuralı; sis mesafesini kısmak ufuk kompozisyonunu değiştiriyor, yani düşük kademede başka bir oyun oluyor. Sabit 45/330 m.
+
+**Grain yok.** Prosedürel ve dokusuz bir sahnenin üzerine film graini, temizliğiyle çelişen bir gürültü koyuyor ve tam ekran bir geçiş daha demek. Kesildi.
+
+Ölçüm: `pnpm perf` (Playwright + CDP, CPU 4x yavaşlatma). GPU taklit edilemiyor, o yüzden GPU bütçesi muhafazakâr ve donanımdan bağımsız sayılarla (çizim çağrısı, üçgen) tutuluyor.
 
 ## Test stratejisi
 
@@ -240,7 +252,7 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 ### Gün 2: sanat yönetimi
 
 - [x] `scene/Atmosphere`: gökyüzü gradyanı, güneş diski, sise oturtulmuş renk
-- [ ] Toz zerreleri
+- [x] Toz zerreleri
 - [x] Alçak açı directional, aracı takip eden dar shadow frustumu, sis mesafesi kalibrasyonu
 - [x] `scene/Effects`: AgX tone mapping, mipmap bloom, vinyet
 - [x] `scene/Scatter`: instanced ağaç/çalı/taş, yoğunluk alanı, eğim eşiği
@@ -263,8 +275,9 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 - [x] Erişilebilirlik: klavye gezinme, odak halkaları, Esc, aria, gizliyken odak dışı; reduced motion önceden
 - [x] `core/quality` + sinematik pencerede kıyaslama ve kademe kilitleme, tercih `localStorage`'da
 - [x] Dokunmatik algılama, mobilde düşük kademe ve klavye ipucu (kamera sürükleme yok, kesildi)
-- [ ] Playwright duman testi
+- [x] Playwright duman testi
 - [x] Profilleme (CPU 4x, `pnpm perf`): kıyaslama kare sayısına bağlıydı, yavaş makinede karar 78 sn sürüyordu; süre sınırı ve panik yolu eklendi, 10.4 sn'ye indi
+- [x] Erişilebilirlik ölçümü: alt bant kontrastı artık iddia değil, en kötü zemin testin kendisi tarafından konularak ölçülüyor
 - [ ] `web-design-guidelines` ve `impeccable` geçişi
 - [x] README: dört ilginç karar, ölçüm tablosu
 - [ ] İki aşamalı inceleme: spec-reviewer, sonra code-reviewer. Bulgular kullanıcıya sunulacak, düzeltme kararı kullanıcının.
@@ -274,8 +287,8 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 
 1. `pnpm test` yeşil, saf çekirdek kapsamı tam.
 2. Playwright duman testi geçiyor, ekran görüntüsü ekli.
-3. `web-perf` raporu: CPU 4x yavaşlatmada kare süresi kabul eşiğinin altında, çizim çağrısı < 150.
-4. Konsolda hata ve uyarı yok.
+3. CPU 4x yavaşlatmada (`pnpm perf`) konsol temiz ve kalite kararı 20 sn içinde geliyor; çizim çağrısı < 150 ve üçgen < 400k (`e2e/smoke.spec.ts`). **Kare süresi bu koşumda ölçülmüyor:** başsız tarayıcıda WebGL yazılım rasterizer'da koşuyor ve oradaki kare süresi hiçbir gerçek donanımı temsil etmiyor. Kare süresi geliştirme panelinden gerçek GPU'da izleniyor.
+4. Konsolda hata ve uyarı yok (`e2e/smoke.spec.ts` ikisini birden topluyor; sadece R3F'in kendi `THREE.Clock` kullanımdan kaldırma uyarısı listelenmiş istisna).
 5. Dokunmatik cihaz taklidinde sinematik mod çalışıyor, sürüş kontrolü görünmüyor.
 6. `prefers-reduced-motion` açıkken kesmeler yumuşuyor.
 7. Ayarlar paneli sadece klavyeyle gezilebiliyor ve kapanabiliyor.

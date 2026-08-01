@@ -5,6 +5,13 @@
  * turetiyor ve useFrame o dongunun icinde. Sesin acik olup olmadigi ise DOM
  * tarafindaki dugmeden geliyor; iki taraf audio/preference uzerinden
  * konusuyor.
+ *
+ * Graf ilk kullanici hareketine kadar hic kurulmuyor. Once acilista askida bir
+ * AudioContext kuruluyordu ve olculdu: Chrome her seferinde "AudioContext was
+ * not allowed to start" uyarisi basiyordu, ustelik uc saniyelik pembe gurultu
+ * tamponu (birkac megabayt) hicbir sese dokunmayacak ziyaretciler icin de
+ * uretiliyordu. Portfolyo linkinde ziyaretcilerin cogu sadece seyrediyor, yani
+ * bu maliyet cogunlugun uzerine biniyordu.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -29,6 +36,7 @@ export function audioInfo(): ReturnType<SoundEngine['info']> | null {
 
 export function Sound(): null {
   const engine = useRef<SoundEngine | null>(null)
+  const enabled = useRef(soundEnabled())
 
   /**
    * Girdi nesnesi yeniden kullaniliyor. Kare basina bir kucuk nesne dert
@@ -38,35 +46,42 @@ export function Sound(): null {
   const input = useMemo<AudioInput>(() => ({ speed: 0, throttle: 0, brake: 0, offroad: 0 }), [])
 
   useEffect(() => {
-    let created: SoundEngine
-    try {
-      created = createSoundEngine()
-    } catch {
-      // Web Audio yoksa deneyim sessiz devam ediyor; hicbir sey kirilmiyor.
-      return
+    /**
+     * Graf ilk kullanici hareketinde kuruluyor, acilista degil. Kaplama veya
+     * "sesi ac" kapisi yok: sahne sessizken de tam calisiyor, ilk dokunusta ses
+     * iki saniyede suzuluyor.
+     */
+    const start = (): void => {
+      if (engine.current) return
+      try {
+        const created = createSoundEngine()
+        engine.current = created
+        instance = created
+        created.setEnabled(enabled.current)
+        created.unlock()
+      } catch {
+        // Web Audio yoksa deneyim sessiz devam ediyor; hicbir sey kirilmiyor.
+      }
     }
-    engine.current = created
-    instance = created
-    created.setEnabled(soundEnabled())
 
-    // Tarayici politikasi: baglam ilk kullanici hareketine kadar askida.
-    // Kaplama veya "sesi ac" kapisi koymuyoruz, ilk dokunusta kendi aciliyor.
-    const unlock = (): void => created.unlock()
-    window.addEventListener('pointerdown', unlock, { once: true })
-    window.addEventListener('keydown', unlock, { once: true })
+    window.addEventListener('pointerdown', start, { once: true })
+    window.addEventListener('keydown', start, { once: true })
 
-    const unsubscribe = subscribeSound((enabled) => created.setEnabled(enabled))
+    const unsubscribe = subscribeSound((next) => {
+      enabled.current = next
+      engine.current?.setEnabled(next)
+    })
 
     // Sekme arkaya alinirken ses kesiliyor: arkada calan bir sekme kaba.
-    const onVisibility = (): void => created.setActive(!document.hidden)
+    const onVisibility = (): void => engine.current?.setActive(!document.hidden)
     document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
-      window.removeEventListener('pointerdown', unlock)
-      window.removeEventListener('keydown', unlock)
+      window.removeEventListener('pointerdown', start)
+      window.removeEventListener('keydown', start)
       document.removeEventListener('visibilitychange', onVisibility)
       unsubscribe()
-      created.dispose()
+      engine.current?.dispose()
       engine.current = null
       instance = null
     }

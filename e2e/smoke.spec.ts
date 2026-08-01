@@ -31,11 +31,29 @@ interface Telemetry {
   maxWheelOffset: number
 }
 
+/**
+ * Bizim olmayan ve elimizde olmayan konsol mesajlari. Liste kasitli olarak cok
+ * dar: her madde neden gorulduguyle birlikte yaziliyor, yoksa liste zamanla
+ * butun uyarilari yutan bir cop kutusuna donuyor.
+ */
+const IGNORED_CONSOLE = [
+  // R3F kendi store'unda new THREE.Clock() kuruyor (node_modules/@react-three/
+  // fiber/dist/events-*.js). Bizim kodumuzda Clock kullanimi yok; three surumu
+  // bunu kullanimdan kaldirdi ve duzeltmesi R3F'te.
+  'THREE.Clock: This module has been deprecated',
+]
+
 function collectProblems(page: Page): { errors: string[] } {
   const errors: string[] = []
 
   page.on('console', (message: ConsoleMessage) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`)
+    // Kabul kriteri hem hatayi hem uyariyi kapsiyor: three.js sorunlarini
+    // tipik olarak uyari seviyesinden soyluyor.
+    const type = message.type()
+    if (type !== 'error' && type !== 'warning') return
+    const text = message.text()
+    if (IGNORED_CONSOLE.some((pattern) => text.includes(pattern))) return
+    errors.push(`console ${type}: ${text}`)
   })
   page.on('pageerror', (error) => {
     errors.push(`pageerror: ${error.message}`)
@@ -232,6 +250,133 @@ test.describe('erisilebilirlik', () => {
     expect(errors).toEqual([])
   })
 
+  test('kontrol metni en kotu zeminde bile 4.5:1 tutuyor', async ({ page }) => {
+    // Sartnamede pazarlik konusu olmayan bir madde, o yuzden iddia edilmiyor
+    // olculuyor.
+    //
+    // Iki olcum denendi ve ikisi de yanlis sonuc verdi. Once sahnenin kendi
+    // zeminine bakildi ve kararsiz cikti: ayni kod bir kosuda 8.9, digerinde
+    // 3.3 verdi, cunku sonuc sinematik programin o anki cercevesine bagliydi.
+    // Sonra metin kutularindaki en parlak piksel arandi ve arayuz suslerini
+    // zemin sandi: secili sekmenin alt cizgisi ve odak halkasi metinden daha
+    // parlak.
+    //
+    // Bu olcum ikisini de cozuyor. En kotu zemin testin kendisi koyuyor
+    // (beyaz katman, sahnenin uretebileceginden acik), ve zemin degeri arayuz
+    // bolgelerinin yuzde doksan besinci dilimi olarak aliniyor: alanin buyuk
+    // kismi zemin oldugu icin bu deger zemini verir, tek tek parlak susler
+    // sonucu suruklemez.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await revealControls(page)
+
+    // Ayarlar acik: panel metni bandin epey uzerine ve soluna yayiliyor, yani
+    // kotu durum burasi. Kapali haldeki iki dugme koyulastirmanin en guclu
+    // kosesinde duruyor.
+    await page.getByRole('button', { name: 'ayarlar' }).click()
+    await expect(page.getByRole('group', { name: 'Ayarlar' })).toBeVisible()
+
+    const regions = await page.evaluate(() =>
+      ['.settings', '.controls']
+        .map((selector) => document.querySelector(selector)?.getBoundingClientRect())
+        .filter((rect): rect is DOMRect => !!rect)
+        .map((rect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })),
+    )
+    expect(regions).toHaveLength(2)
+
+    await page.evaluate(() => {
+      const root = document.getElementById('root')
+      const hud = document.querySelector('.hud')
+      if (!root || !hud) throw new Error('arayuz bulunamadi')
+
+      const worst = document.createElement('div')
+      worst.style.cssText =
+        'position:fixed;inset:auto 0 0 0;height:320px;background:#ffffff;pointer-events:none'
+      // Canvas ile arayuz arasina giriyor: opak canvas'in ustunde ama kumenin
+      // altinda. Body'nin basina eklemek ise yaramiyor, canvas onu kapatiyor.
+      root.insertBefore(worst, hud)
+    })
+
+    const shot = (await page.screenshot({ type: 'png' })).toString('base64')
+
+    const measured = await page.evaluate(
+      async ({
+        base64,
+        areas,
+      }: {
+        base64: string
+        areas: Array<{ x: number; y: number; width: number; height: number }>
+      }) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${base64}`
+        await image.decode()
+
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')
+        if (!context) throw new Error('2d baglami yok')
+        context.drawImage(image, 0, 0)
+
+        const channel = (value: number): number => {
+          const s = value / 255
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+        }
+        const luminance = (pixel: number[]): number =>
+          0.2126 * channel(pixel[0]!) + 0.7152 * channel(pixel[1]!) + 0.0722 * channel(pixel[2]!)
+
+        // Ekran goruntusu cihaz piksellerinde, kutular CSS piksellerinde.
+        const scale = image.width / window.innerWidth
+        const pixels: number[][] = []
+        for (const area of areas) {
+          const data = context.getImageData(
+            Math.max(0, Math.floor(area.x * scale)),
+            Math.max(0, Math.floor(area.y * scale)),
+            Math.max(1, Math.floor(area.width * scale)),
+            Math.max(1, Math.floor(area.height * scale)),
+          ).data
+          for (let i = 0; i < data.length; i += 4) {
+            pixels.push([data[i]!, data[i + 1]!, data[i + 2]!])
+          }
+        }
+
+        pixels.sort((a, b) => luminance(a) - luminance(b))
+        const background = pixels[Math.floor(pixels.length * 0.95)]!
+
+        const paper = [245, 239, 230]
+        const contrastFor = (alpha: number): number => {
+          const mixed = paper.map((component, i) => alpha * component + (1 - alpha) * background[i]!)
+          const a = luminance(mixed)
+          const b = luminance(background)
+          const [high, low] = a > b ? [a, b] : [b, a]
+          return (high + 0.05) / (low + 0.05)
+        }
+
+        const style = getComputedStyle(document.documentElement)
+        const alphaOf = (token: string): number => {
+          const match = /rgba?\([^)]*?([\d.]+)\s*\)/.exec(style.getPropertyValue(token))
+          return match ? Number(match[1]) : 1
+        }
+
+        return {
+          background,
+          samples: pixels.length,
+          strong: contrastFor(alphaOf('--hud-strong')),
+          second: contrastFor(alphaOf('--hud-second')),
+          secondAlpha: alphaOf('--hud-second'),
+        }
+      },
+      { base64: shot, areas: regions },
+    )
+
+    // Koyulastirma beyazi gercekten kirmis olmali; kirmadiysa olcum anlamsiz.
+    expect(measured.samples).toBeGreaterThan(1000)
+    expect(Math.max(...measured.background)).toBeLessThan(160)
+    expect(measured.secondAlpha).toBeGreaterThan(0.5)
+    expect(measured.strong).toBeGreaterThanOrEqual(4.5)
+    expect(measured.second).toBeGreaterThanOrEqual(4.5)
+  })
+
   test('acilis karti ekran okuyucudan sakli', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('.titlecard')).toHaveAttribute('aria-hidden', 'true')
@@ -282,15 +427,17 @@ async function readAudio(page: Page): Promise<AudioInfo | null> {
 }
 
 test.describe('ses', () => {
-  test('ses baglami dokunulmadan askida, ilk tusla acılıyor', async ({ page }) => {
-    // Otomatik oynatma politikasi geregi askida basliyor, ve bunu bir kaplama
-    // ile degil ilk gercek dokunusla asiyoruz: sayfa sessiz ama tam calisir.
+  test('ses grafi dokunulmadan kurulmuyor, ilk tusla aciliyor', async ({ page }) => {
+    // Otomatik oynatma politikasi geregi ses ilk gercek dokunusla basliyor, ve
+    // bunu bir kaplama ile degil o dokunusla asiyoruz: sayfa sessiz ama tam
+    // calisir.
     await page.goto('/')
     await waitUntilRunning(page)
 
-    const before = await readAudio(page)
-    expect(before?.state).toBe('suspended')
-    expect(before?.unlocked).toBe(false)
+    // Dokunulmadan once graf hic kurulmuyor: ne AudioContext var ne gurultu
+    // tamponu. Onceki uygulamada askida bir baglam kuruluyordu ve Chrome her
+    // seferinde uyari basiyordu.
+    expect(await readAudio(page)).toBeNull()
 
     await page.keyboard.press('KeyW')
     await page.waitForFunction(
@@ -374,7 +521,7 @@ async function readQuality(page: Page): Promise<QualityInfo> {
   })
 }
 
-/** Kontrol kumesi kullanici niyetiyle geliyor; fareyi kimildatmak yeterli. */
+/** Kontrol kumesi isaretleyici niyetiyle geliyor; fareyi kimildatmak yeterli. */
 async function revealControls(page: Page): Promise<void> {
   await page.mouse.move(400, 300)
   await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'false')
@@ -507,6 +654,69 @@ test.describe('ayarlar', () => {
     expect(info.choice).toBe('auto')
     expect(['low', 'medium', 'high']).toContain(info.measured)
     expect(info.tier).toBe(info.measured)
+  })
+})
+
+test.describe('surus arayuzu', () => {
+  test('surerken ekranda sadece hiz kaliyor', async ({ page }) => {
+    // Kilitlenen karar: surerken ekranda sadece hiz var. Klavye kumeyi
+    // getirmiyor, ve klavye ipucu bir kez gosterilip cekiliyor.
+    await page.goto('/')
+    await waitUntilRunning(page)
+
+    await page.keyboard.down('ArrowUp')
+    await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'false')
+    await expect(page.locator('.hint--drive')).toHaveAttribute('data-hidden', 'false')
+
+    // Ipucu suresi ve kume gecikmesi gecsin. Bu sureler gercek zamanda
+    // isliyor, kare hizina bagli degil.
+    await page.waitForTimeout(9000)
+    await page.keyboard.up('ArrowUp')
+
+    await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'true')
+    await expect(page.locator('.hint--drive')).toHaveAttribute('data-hidden', 'true')
+    // Hiz duruyor.
+    await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'false')
+    await expect(page.locator('.speed__unit')).toHaveText('km/h')
+  })
+
+  test('gizli kumeye klavyeyle ulasilabiliyor', async ({ page }) => {
+    // Kume gizliyken de sekme sirasinda: odak gelince gorunur oluyor. Onceki
+    // uygulamada visibility: hidden vardi ve gorunmez ogeye odak gitmedigi
+    // icin klavyeyle gezen biri ayarlara hic ulasamiyordu.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await page.waitForTimeout(4500)
+    await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'true')
+
+    const settings = page.getByRole('button', { name: 'ayarlar' })
+    await settings.focus()
+    await expect(settings).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('group', { name: 'Ayarlar' })).toBeVisible()
+  })
+})
+
+test.describe('dokunmatik cihaz', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('sinematik modda kaliyor, surus kontrolu yok, kademe dusuk', async ({ page }) => {
+    const { errors } = collectProblems(page)
+    await page.goto('/')
+    await waitUntilRunning(page)
+
+    // Dokunmatik cihazda kademe olcum beklemeden dusuge sabitleniyor.
+    expect((await readQuality(page)).tier).toBe('low')
+
+    // Kume dokunusla geliyor ve surus yerine klavye ipucu soyluyor.
+    await page.tap('body')
+    await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'false')
+    await expect(page.getByText('klavyeli bir cihazda sürebilirsin')).toBeVisible()
+
+    // Sinematik mod devam ediyor, hiz gostergesi yok.
+    expect((await readTelemetry(page)).mode).toBe('cinematic')
+    await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'true')
+    expect(errors).toEqual([])
   })
 })
 
