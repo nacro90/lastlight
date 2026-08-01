@@ -15,7 +15,7 @@ pnpm dev
 
 ## Ne indiriliyor
 
-Hiçbir şey. Doku yok, model yok, ses dosyası yok. Arazi, yol, ağaçlar, araç, gökyüzü, toz ve dört katmanlı ses; hepsi çalışma anında üretiliyor. Bu bir kısıtlama olarak seçildi çünkü ters ışıkta form görünür, detay görünmez: alçak güneşte doku eklemenin görsel getirisi yok, maliyeti tam.
+Yazı tipi dışında hiçbir şey; o da kendi sunucumuzdan ve subset alınmış, toplam 16 KB. Doku yok, model yok, ses dosyası yok. Arazi, yol, ağaçlar, araç, gökyüzü, toz ve dört katmanlı ses; hepsi çalışma anında üretiliyor. Bu bir kısıtlama olarak seçildi çünkü ters ışıkta form görünür, detay görünmez: alçak güneşte doku eklemenin görsel getirisi yok, maliyeti tam.
 
 ## İlginç dört karar
 
@@ -33,7 +33,7 @@ Performans bütçeleri donanımdan bağımsız sayılarla yazılı, çünkü gel
 
 | Bütçe | Sınır | Ölçülen |
 |---|---|---|
-| Çizim çağrısı | < 150 | 112 |
+| Çizim çağrısı | < 150 | 124 |
 | Üçgen | < 400k | 140k |
 | Dilim üretimi | kare bütçesinin altında | 0.37 ms |
 
@@ -41,7 +41,7 @@ Kare başına en fazla bir arazi dilimi üretiliyor; havuz sabit kırk sekiz mes
 
 Kalite kademesi sinematik pencerede ölçülüyor ve kilitleniyor. Ölçüm en yüksek kademede yapılıyor, sonra gerekirse aşağı iniliyor: ters yönde ölçmek yalan sonuç verir. Kesilen şey çözünürlük ve yoğunluk; bloom ve gökyüzü gradyanı hiçbir kademede kapanmıyor.
 
-Testler: 241 birim testi (sadece saf çekirdek), 23 tarayıcı testi (Playwright). Kritik testler kasten bozulup düştükleri görüldü, yani boşa geçmiyorlar.
+Testler: 270 birim testi (sadece saf çekirdek), 23 tarayıcı testi (Playwright). Kritik testler kasten bozulup düştükleri görüldü, yani boşa geçmiyorlar.
 
 ## Yığın
 
