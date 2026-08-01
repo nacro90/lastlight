@@ -2,6 +2,8 @@
 
 Sonsuz bir akşam sürüşü. Hedef yok, skor yok, bitiş yok: güneş her zaman önde, yol her zaman devam ediyor.
 
+**Canlı: [lastlight-beta.vercel.app](https://lastlight-beta.vercel.app)**
+
 Sayfa açıldığında kimse bir şey sormuyor; kamera kendi kendine sürerken sekiz on iki saniyede bir kesme yapıyor. Bir tuşa dokunulduğu an kontrol sürücüye geçiyor, yirmi beş saniye dokunulmazsa sinematik mod geri devralıyor.
 
 ```bash
