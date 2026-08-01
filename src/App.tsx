@@ -12,6 +12,8 @@ import { ChaseCamera } from '@/scene/ChaseCamera'
 import { Effects } from '@/scene/Effects'
 import { PerfProbe } from '@/scene/PerfProbe'
 import { QualityProbe } from '@/scene/QualityProbe'
+import { Markings } from '@/scene/Markings'
+import { Signs } from '@/scene/Signs'
 import { Scatter } from '@/scene/Scatter'
 import { World } from '@/scene/World'
 import { terrainHeightAtWorld } from '@/core/terrain'
@@ -28,6 +30,8 @@ function Scene(): React.ReactElement {
       <Simulation />
       <Atmosphere />
       <World />
+      <Markings />
+      <Signs />
       <Scatter />
       <Car />
       <ContactShadow />
