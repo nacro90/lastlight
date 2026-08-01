@@ -89,7 +89,16 @@ function useRecentPointer(): boolean {
   return active
 }
 
-/** Surus modu basladiktan sonra kisa bir sure dogru kaliyor. */
+/**
+ * Surus modu basladiktan sonra kisa bir sure dogru kaliyor, sonra bir daha
+ * donmuyor.
+ *
+ * Zamanlayici gorunurluge bagli ayri bir effect'te: ayni effect icinde olsa
+ * `driving` her degistiginde temizleme zamanlayiciyi iptal ediyor ama "bir kez
+ * gosterildi" bayragi yuzunden yeniden kurulmuyordu. Bugun kaza ile calisiyordu
+ * cunku bosta kalma donusu (25 sn) ipucu suresinden (7 sn) uzun; iki ayri
+ * modulde duran bu bagi kimse yazili gormemis olurdu.
+ */
 function useDrivingHint(driving: boolean): boolean {
   const [visible, setVisible] = useState(false)
   const shown = useRef(false)
@@ -98,9 +107,13 @@ function useDrivingHint(driving: boolean): boolean {
     if (!driving || shown.current) return
     shown.current = true
     setVisible(true)
+  }, [driving])
+
+  useEffect(() => {
+    if (!visible) return
     const timer = window.setTimeout(() => setVisible(false), HINT_DURATION_MS)
     return () => window.clearTimeout(timer)
-  }, [driving])
+  }, [visible])
 
   return visible
 }
@@ -275,8 +288,11 @@ export function Hud(): React.ReactElement {
           <span className="speed__value">{snapshot.speedKmh}</span>
           <span className="speed__unit">km/h</span>
         </div>
-        {/* Ipucu surus baslarken bir kez geliyor ve cekiliyor. */}
-        <span className="hint hint--drive" data-hidden={!hintVisible}>
+        {/* Ipucu surus baslarken bir kez geliyor ve cekiliyor. Sonduktan sonra
+            ekran okuyucudan da cikiyor: opacity: 0 ogeyi erisilebilirlik
+            agacindan cikarmiyor, yani gorunmeyen bir ipucu okunmaya devam
+            ediyordu. */}
+        <span className="hint hint--drive" data-hidden={!hintVisible} aria-hidden={!hintVisible}>
           W A S D
         </span>
       </div>

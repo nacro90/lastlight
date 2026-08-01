@@ -14,12 +14,20 @@
  * sonrasina uygulanirsa alcak cekimlerde kamera her karede zemine kilitlenip
  * gorunur bir titreme uretiyor.
  *
- * Bakis mesafesi ve gorus acisi da yumusatiliyor, ve bunun sebebi devir teslim.
- * Konum zaten yayla geliyordu ama bakis noktasi ve gorus acisi mod degisiminde
- * tek karede siciriyordu: onden geri giden cekim etkinken tusa basildiginda
- * bakis yonu bir karede yaklasik yuz seksen derece donuyor, tepeden vinc
- * cekiminde ise gorus acisi kirk dortten elli bese atliyor. Ikisi de sakin bir
- * deneyimde gorunur bir pop.
+ * Yonelim ve gorus acisi da yumusatiliyor, ve bunun sebebi devir teslim. Konum
+ * zaten yayla geliyordu ama bakis yonu ve gorus acisi mod degisiminde tek
+ * karede siciriyordu: onden geri giden cekim etkinken tusa basildiginda bakis
+ * yonu bir karede yaklasik yuz altmis derece donuyor, tepeden vinc cekiminde
+ * ise gorus acisi kirk dortten elli bese atliyor.
+ *
+ * Yumusatma yonelimin kendisine uygulaniyor, bakis mesafesine degil. Once
+ * mesafe (skaler) yumusatildi ve olculdu: onden geri giden cekimde bakis
+ * noktasi aracin uc metre arkasindan yirmi dort metre onune gidiyor, yani
+ * aradaki butun degerleri sirayla aldigi icin kameranin kendi konumunun
+ * icinden geciyor. Sonuc pop'un kalkmasi degil bes kareye yayilmasi oldu: tepe
+ * degeri kare basina yetmis bir derece ve kamera bir an yanindaki zemine
+ * bakiyordu. Quaternion uzerinde slerp en kisa yayi izliyor, yani bu geometrik
+ * olarak imkansiz hale geliyor.
  *
  * Kamera sarsintisi yok, sarsinti bu projenin duygusuna aykiri.
  */
@@ -50,10 +58,11 @@ const DRIVING_FOV = 52
 const FOV_PER_SPEED = 0.14
 
 /**
- * Bakis mesafesi ve gorus acisinin hedefe yetisme hizi (1/s). Bes, yaklasik
- * alti yuz milisaniyede oturmak demek: kilitlenen karar da devir teslim icin
- * bunu soyluyor. Normal surus ve sinematik kesme sirasinda hedefler zaten yavas
- * degistigi icin bu yumusatma gorunmuyor; sadece mod degisiminde is yapiyor.
+ * Yonelimin ve gorus acisinin hedefe yetisme hizi (1/s). Bes, yaklasik alti yuz
+ * milisaniyede oturmak demek: kilitlenen karar da devir teslim icin bunu
+ * soyluyor. Normal surus ve sinematik kesme sirasinda hedefler zaten yavas
+ * degistigi icin gorunen tek etkisi virajda birkac derecelik hos bir gecikme;
+ * asil isi mod degisiminde yapiyor.
  */
 const HANDOVER_RATE = 5
 
@@ -72,8 +81,23 @@ function prefersReducedMotion(): boolean {
 export function ChaseCamera(): null {
   const { camera } = useThree()
   const lookTarget = useRef(new THREE.Vector3())
-  const smoothedLookAhead = useRef(LOOK_AHEAD_BASE)
   const smoothedFov = useRef(DRIVING_FOV)
+
+  /**
+   * Kare dongusunde ayirma yapmamak icin calisma nesneleri. Yonelim hedefi her
+   * karede bunlarin uzerinde kuruluyor.
+   */
+  const scratch = useMemo(
+    () => ({ matrix: new THREE.Matrix4(), quaternion: new THREE.Quaternion() }),
+    [],
+  )
+
+  /**
+   * Ilk kare hedefe kenetleniyor. Yoksa yumusatilan degerler surus
+   * varsayilanindan basliyor ve uygulama sinematik acildigi icin acilis
+   * kartinin uzerinde istenmeyen bir kaydirma ve zoom oluyor.
+   */
+  const seeded = useRef(false)
 
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion)
 
@@ -128,25 +152,25 @@ export function ChaseCamera(): null {
     camera.position.y += (desiredY - camera.position.y) * blend
     camera.position.z += (desiredZ - camera.position.z) * blend
 
-    // Bakis mesafesi olcek olarak yumusatiliyor, dunya noktasi olarak degil:
-    // dunya noktasini yumusatmak arac donerken bakis noktasini geride
-    // birakiyor ve kamera viraj boyunca yolun disina bakiyor.
-    smoothedLookAhead.current = approach(
-      smoothedLookAhead.current,
-      lookAhead,
-      HANDOVER_RATE,
-      delta,
-    )
-    const smoothLookAhead = smoothedLookAhead.current
-
     lookTarget.current.set(
-      car.x + forwardX * smoothLookAhead,
+      car.x + forwardX * lookAhead,
       car.y + LOOK_HEIGHT,
-      car.z + forwardZ * smoothLookAhead,
+      car.z + forwardZ * lookAhead,
     )
-    camera.lookAt(lookTarget.current)
 
-    smoothedFov.current = approach(smoothedFov.current, fov, HANDOVER_RATE, delta)
+    // Hedef yonelim: kameranin konumundan bakis noktasina bakan donus.
+    scratch.matrix.lookAt(camera.position, lookTarget.current, camera.up)
+    scratch.quaternion.setFromRotationMatrix(scratch.matrix)
+
+    if (!seeded.current) {
+      seeded.current = true
+      camera.quaternion.copy(scratch.quaternion)
+      smoothedFov.current = fov
+    } else {
+      camera.quaternion.slerp(scratch.quaternion, 1 - Math.exp(-HANDOVER_RATE * delta))
+      smoothedFov.current = approach(smoothedFov.current, fov, HANDOVER_RATE, delta)
+    }
+
     if (
       camera instanceof THREE.PerspectiveCamera &&
       Math.abs(camera.fov - smoothedFov.current) > 0.02

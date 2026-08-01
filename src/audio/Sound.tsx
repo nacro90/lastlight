@@ -9,9 +9,9 @@
  * Graf ilk kullanici hareketine kadar hic kurulmuyor. Once acilista askida bir
  * AudioContext kuruluyordu ve olculdu: Chrome her seferinde "AudioContext was
  * not allowed to start" uyarisi basiyordu, ustelik uc saniyelik pembe gurultu
- * tamponu (birkac megabayt) hicbir sese dokunmayacak ziyaretciler icin de
- * uretiliyordu. Portfolyo linkinde ziyaretcilerin cogu sadece seyrediyor, yani
- * bu maliyet cogunlugun uzerine biniyordu.
+ * tamponu (48 kHz tek kanal float32, yani 576 KB) hicbir sese dokunmayacak
+ * ziyaretciler icin de uretiliyordu. Portfolyo linkinde ziyaretcilerin cogu
+ * sadece seyrediyor, yani bu maliyet cogunlugun uzerine biniyordu.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -36,7 +36,6 @@ export function audioInfo(): ReturnType<SoundEngine['info']> | null {
 
 export function Sound(): null {
   const engine = useRef<SoundEngine | null>(null)
-  const enabled = useRef(soundEnabled())
 
   /**
    * Girdi nesnesi yeniden kullaniliyor. Kare basina bir kucuk nesne dert
@@ -57,7 +56,7 @@ export function Sound(): null {
         const created = createSoundEngine()
         engine.current = created
         instance = created
-        created.setEnabled(enabled.current)
+        created.setEnabled(soundEnabled())
         created.unlock()
       } catch {
         // Web Audio yoksa deneyim sessiz devam ediyor; hicbir sey kirilmiyor.
@@ -67,10 +66,7 @@ export function Sound(): null {
     window.addEventListener('pointerdown', start, { once: true })
     window.addEventListener('keydown', start, { once: true })
 
-    const unsubscribe = subscribeSound((next) => {
-      enabled.current = next
-      engine.current?.setEnabled(next)
-    })
+    const unsubscribe = subscribeSound((next) => engine.current?.setEnabled(next))
 
     // Sekme arkaya alinirken ses kesiliyor: arkada calan bir sekme kaba.
     const onVisibility = (): void => engine.current?.setActive(!document.hidden)

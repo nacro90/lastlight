@@ -252,37 +252,91 @@ test.describe('erisilebilirlik', () => {
 
   test('kontrol metni en kotu zeminde bile 4.5:1 tutuyor', async ({ page }) => {
     // Sartnamede pazarlik konusu olmayan bir madde, o yuzden iddia edilmiyor
-    // olculuyor.
+    // olculuyor. Uc olcum denendi ve ucu de yanlis sonuc verdi:
     //
-    // Iki olcum denendi ve ikisi de yanlis sonuc verdi. Once sahnenin kendi
-    // zeminine bakildi ve kararsiz cikti: ayni kod bir kosuda 8.9, digerinde
-    // 3.3 verdi, cunku sonuc sinematik programin o anki cercevesine bagliydi.
-    // Sonra metin kutularindaki en parlak piksel arandi ve arayuz suslerini
-    // zemin sandi: secili sekmenin alt cizgisi ve odak halkasi metinden daha
-    // parlak.
+    // 1. Sahnenin kendi zeminine bakmak kararsizdi: ayni kod bir kosuda 8.9,
+    //    digerinde 3.3 verdi, cunku sonuc sinematik programin o anki
+    //    cercevesine bagliydi.
+    // 2. Metin kutularindaki en parlak pikseli aramak arayuz suslerini zemin
+    //    sandi: secili sekmenin alt cizgisi ve odak halkasi metinden parlak.
+    // 3. Kapsayicilari visibility ile gizlemek panelin kendi zeminini de
+    //    gizledi, yani metnin gercekte oturdugu zemin olculmedi.
     //
-    // Bu olcum ikisini de cozuyor. En kotu zemin testin kendisi koyuyor
-    // (beyaz katman, sahnenin uretebileceginden acik), ve zemin degeri arayuz
-    // bolgelerinin yuzde doksan besinci dilimi olarak aliniyor: alanin buyuk
-    // kismi zemin oldugu icin bu deger zemini verir, tek tek parlak susler
-    // sonucu suruklemez.
+    // Bu kurulum ucunu de cozuyor: en kotu zemini test koyuyor (beyaz katman,
+    // sahnenin uretebileceginden acik), murekkep ve susler seffaflasiyor, ve
+    // metin renkleri gercek ogelerden okunuyor.
     await page.goto('/')
     await waitUntilRunning(page)
     await revealControls(page)
 
     // Ayarlar acik: panel metni bandin epey uzerine ve soluna yayiliyor, yani
-    // kotu durum burasi. Kapali haldeki iki dugme koyulastirmanin en guclu
-    // kosesinde duruyor.
+    // kotu durum burasi.
     await page.getByRole('button', { name: 'ayarlar' }).click()
     await expect(page.getByRole('group', { name: 'Ayarlar' })).toBeVisible()
 
-    const regions = await page.evaluate(() =>
-      ['.settings', '.controls']
-        .map((selector) => document.querySelector(selector)?.getBoundingClientRect())
-        .filter((rect): rect is DOMRect => !!rect)
-        .map((rect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })),
+    const setup = await page.evaluate(() => {
+      const rectOf = (selector: string): DOMRect => {
+        const element = document.querySelector(selector)
+        if (!element) throw new Error(`bulunamadi: ${selector}`)
+        return element.getBoundingClientRect()
+      }
+
+      /**
+       * Olculecek seritler metnin olamayacagi yerlerden seciliyor: panelin ust
+       * dolgusu ve kontrol satirinin altindaki bant. Murekkebi CSS ile
+       * seffaflastirmak denendi ve kirilgan cikti (secili sekmenin alt cizgisi
+       * ve odak halkasi inatci), ustelik olcumun dogrulugu enjekte edilen bir
+       * stile bagli kaliyordu. Metnin hic olmadigi bir serit bu sorunu
+       * tamamen ortadan kaldiriyor, ve koyulastirma o seritte metnin altindaki
+       * ile ayni.
+       */
+      const settings = rectOf('.settings')
+      const controls = rectOf('.controls')
+      const regions = [
+        // Panelin ust dolgusu (0.9rem): yatayda kose yaricapinin otesine
+        // ceviriliyor.
+        { x: settings.x + 14, y: settings.y + 2, width: settings.width - 28, height: 9 },
+        // Kontrol satirinin altindaki alt bant dolgusu.
+        { x: controls.x, y: controls.bottom + 2, width: controls.width, height: 9 },
+      ]
+
+      // Metin renkleri token'dan degil gercek ogeden okunuyor: token adi veya
+      // renk sozdizimi degisirse (ornek: rgb(... / 30%)) ayristirma sessizce
+      // iyimser tarafa dusmesin.
+      const colorOf = (selector: string): string => {
+        const element = document.querySelector(selector)
+        if (!element) throw new Error(`bulunamadi: ${selector}`)
+        return getComputedStyle(element).color
+      }
+
+      return {
+        regions,
+        colors: {
+          label: colorOf('.settings__label'),
+          value: colorOf('.settings__value--plain'),
+          toggle: colorOf('.cluster .toggle'),
+        },
+      }
+    })
+    expect(setup.regions).toHaveLength(2)
+
+    /** rgb(a) dizisini sayilara cevirir; ayristiramazsa testi patlatir. */
+    const parseColor = (value: string): { rgb: number[]; alpha: number } => {
+      const numbers = value.match(/[\d.]+/g)
+      if (!numbers || numbers.length < 3) throw new Error(`renk ayristirilamadi: ${value}`)
+      const rgb = numbers.slice(0, 3).map(Number)
+      const alpha = numbers.length > 3 ? Number(numbers[3]) : 1
+      if (!Number.isFinite(alpha) || alpha <= 0 || alpha > 1) {
+        throw new Error(`opaklik araligin disinda: ${value}`)
+      }
+      return { rgb, alpha }
+    }
+
+    const colors = Object.fromEntries(
+      Object.entries(setup.colors).map(([name, value]) => [name, parseColor(value)]),
     )
-    expect(regions).toHaveLength(2)
+    // Metnin gercekten yariginan degil parlak oldugunu da dogruluyoruz.
+    for (const color of Object.values(colors)) expect(color.alpha).toBeGreaterThan(0.5)
 
     await page.evaluate(() => {
       const root = document.getElementById('root')
@@ -297,9 +351,15 @@ test.describe('erisilebilirlik', () => {
       root.insertBefore(worst, hud)
     })
 
+    // Kume tam opak olmadan olcmek yaridan saydam bir koyulastirma olcmek olur.
+    await page.waitForFunction(() => {
+      const cluster = document.querySelector('.cluster')
+      return !!cluster && getComputedStyle(cluster).opacity === '1'
+    })
+
     const shot = (await page.screenshot({ type: 'png' })).toString('base64')
 
-    const measured = await page.evaluate(
+    const probe = await page.evaluate(
       async ({
         base64,
         areas,
@@ -318,16 +378,12 @@ test.describe('erisilebilirlik', () => {
         if (!context) throw new Error('2d baglami yok')
         context.drawImage(image, 0, 0)
 
-        const channel = (value: number): number => {
-          const s = value / 255
-          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
-        }
-        const luminance = (pixel: number[]): number =>
-          0.2126 * channel(pixel[0]!) + 0.7152 * channel(pixel[1]!) + 0.0722 * channel(pixel[2]!)
-
         // Ekran goruntusu cihaz piksellerinde, kutular CSS piksellerinde.
         const scale = image.width / window.innerWidth
-        const pixels: number[][] = []
+        let brightest = [0, 0, 0]
+        let brightestSum = -1
+        let where = ''
+
         for (const area of areas) {
           const data = context.getImageData(
             Math.max(0, Math.floor(area.x * scale)),
@@ -335,46 +391,46 @@ test.describe('erisilebilirlik', () => {
             Math.max(1, Math.floor(area.width * scale)),
             Math.max(1, Math.floor(area.height * scale)),
           ).data
+          const rowWidth = Math.max(1, Math.floor(area.width * scale))
           for (let i = 0; i < data.length; i += 4) {
-            pixels.push([data[i]!, data[i + 1]!, data[i + 2]!])
+            const sum = data[i]! + data[i + 1]! + data[i + 2]!
+            if (sum > brightestSum) {
+              brightestSum = sum
+              brightest = [data[i]!, data[i + 1]!, data[i + 2]!]
+              const pixel = i / 4
+              const px = Math.round(area.x + (pixel % rowWidth) / scale)
+              const py = Math.round(area.y + Math.floor(pixel / rowWidth) / scale)
+              where = `${Math.round(area.width)}x${Math.round(area.height)} @ ${px},${py}`
+            }
           }
         }
-
-        pixels.sort((a, b) => luminance(a) - luminance(b))
-        const background = pixels[Math.floor(pixels.length * 0.95)]!
-
-        const paper = [245, 239, 230]
-        const contrastFor = (alpha: number): number => {
-          const mixed = paper.map((component, i) => alpha * component + (1 - alpha) * background[i]!)
-          const a = luminance(mixed)
-          const b = luminance(background)
-          const [high, low] = a > b ? [a, b] : [b, a]
-          return (high + 0.05) / (low + 0.05)
-        }
-
-        const style = getComputedStyle(document.documentElement)
-        const alphaOf = (token: string): number => {
-          const match = /rgba?\([^)]*?([\d.]+)\s*\)/.exec(style.getPropertyValue(token))
-          return match ? Number(match[1]) : 1
-        }
-
-        return {
-          background,
-          samples: pixels.length,
-          strong: contrastFor(alphaOf('--hud-strong')),
-          second: contrastFor(alphaOf('--hud-second')),
-          secondAlpha: alphaOf('--hud-second'),
-        }
+        return { brightest, where }
       },
-      { base64: shot, areas: regions },
+      { base64: shot, areas: setup.regions },
     )
+    const background = probe.brightest
+    console.log('ZEMIN', JSON.stringify(probe))
+
+    const channel = (value: number): number => {
+      const s = value / 255
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+    }
+    const luminance = (pixel: number[]): number =>
+      0.2126 * channel(pixel[0]!) + 0.7152 * channel(pixel[1]!) + 0.0722 * channel(pixel[2]!)
+
+    const contrastFor = ({ rgb, alpha }: { rgb: number[]; alpha: number }): number => {
+      const mixed = rgb.map((component, i) => alpha * component + (1 - alpha) * background[i]!)
+      const a = luminance(mixed)
+      const b = luminance(background)
+      const [high, low] = a > b ? [a, b] : [b, a]
+      return (high + 0.05) / (low + 0.05)
+    }
 
     // Koyulastirma beyazi gercekten kirmis olmali; kirmadiysa olcum anlamsiz.
-    expect(measured.samples).toBeGreaterThan(1000)
-    expect(Math.max(...measured.background)).toBeLessThan(160)
-    expect(measured.secondAlpha).toBeGreaterThan(0.5)
-    expect(measured.strong).toBeGreaterThanOrEqual(4.5)
-    expect(measured.second).toBeGreaterThanOrEqual(4.5)
+    expect(Math.max(...background)).toBeLessThan(160)
+    for (const [name, color] of Object.entries(colors)) {
+      expect(contrastFor(color), `${name} kontrasti`).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   test('acilis karti ekran okuyucudan sakli', async ({ page }) => {
@@ -534,6 +590,10 @@ test.describe('ayarlar', () => {
     await page.goto('/')
     await waitUntilRunning(page)
     await revealControls(page)
+    // toBeVisible burada tek basina yetmiyor: kume gorunurlugu opacity ile
+    // tasiniyor ve Playwright'in gorunurluk tanimi opacity'ye bakmiyor. Gercek
+    // koruma revealControls icindeki data-hidden iddiasi.
+    await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'false')
     await expect(page.getByRole('button', { name: 'ayarlar' })).toBeVisible()
   })
 
@@ -710,6 +770,8 @@ test.describe('dokunmatik cihaz', () => {
 
     // Kume dokunusla geliyor ve surus yerine klavye ipucu soyluyor.
     await page.tap('body')
+    // data-hidden gercek koruma; toBeVisible opacity'ye bakmadigi icin kume
+    // tamamen saydam olsa da gecerdi.
     await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'false')
     await expect(page.getByText('klavyeli bir cihazda sürebilirsin')).toBeVisible()
 

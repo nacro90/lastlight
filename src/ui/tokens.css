@@ -142,11 +142,14 @@ canvas {
 .cluster::before {
   content: '';
   position: absolute;
-  inset: -1.6rem -1.1rem -0.7rem -3.2rem;
+  /* Kutu gradyanin sonmesi icin gereginden buyuk. Once daha kucuktu ve
+     gradyan seffaflasmadan kutu bitiyordu, yani ekranda duz bir kenar
+     goruluyordu. */
+  inset: -6rem -1.1rem -0.7rem -11rem;
   background: radial-gradient(
-    130% 150% at 88% 100%,
-    rgba(12, 8, 22, 0.82) 0%,
-    rgba(12, 8, 22, 0.74) 42%,
+    58% 130% at 92% 100%,
+    rgba(12, 8, 22, 0.86) 0%,
+    rgba(12, 8, 22, 0.79) 30%,
     rgba(12, 8, 22, 0) 100%
   );
   pointer-events: none;
@@ -158,13 +161,28 @@ canvas {
   pointer-events: none;
 }
 
+/* Cocuklar pointer-events: auto verdigi icin ebeveyne none koymak yetmiyor, ve
+   opacity: 0 isabet testini etkilemiyor: kume tamamen gorunmezken dugmeler
+   hedef kaliyordu. Telefonda sag alt koseye dokunan biri gorunurde hicbir seye
+   dokunmadan ayarlari aciyordu. */
+.cluster[data-hidden='true'] :where(.toggle, .chip, .settings) {
+  pointer-events: none;
+}
+
 /* Gizliyken de sekmeyle ulasilabiliyor, ama odak gelince kume gorunur oluyor.
    visibility: hidden kullanmak daha temiz gorunuyordu ama gorunmez bir ogeye
-   odak da gitmiyor: klavyeyle gezen biri ayarlara hic ulasamiyordu. Simdi
-   dugme odaga geldigi an kume aciliyor, ve odak icindeyken hicbir zaman
-   kaybolmuyor. */
-.cluster[data-hidden='true']:focus-within {
+   odak da gitmiyor: klavyeyle gezen biri ayarlara hic ulasamiyordu.
+ *
+ * Kosul :focus-within degil :focus-visible: ayarlari fareyle kapatinca odak
+ * geldigi dugmeye donuyor, focus-within ile kume oradan sonra sonsuza kadar
+ * ekranda kaliyordu. focus-visible sadece klavye kaynakli odakta esleser, yani
+ * istenen davranisin tam karsiligi. */
+.cluster[data-hidden='true']:has(:focus-visible) {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.cluster[data-hidden='true']:has(:focus-visible) :where(.toggle, .chip, .settings) {
   pointer-events: auto;
 }
 
@@ -370,7 +388,7 @@ canvas {
   font-weight: 500;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--hud-muted);
+  color: var(--hud-second);
   text-shadow: var(--hud-shadow);
 }
 
@@ -382,7 +400,7 @@ canvas {
   font-size: 11px;
   line-height: 1.55;
   font-variant-numeric: tabular-nums;
-  color: var(--hud-muted);
+  color: var(--hud-second);
   background: rgba(12, 8, 22, 0.62);
   border: 1px solid rgba(245, 239, 230, 0.1);
   border-radius: 5px;
@@ -398,6 +416,7 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
   .hud,
   .cluster,
+  .hint--drive,
   .titlecard,
   .toggle,
   .chip {
