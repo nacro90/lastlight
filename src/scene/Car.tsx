@@ -16,12 +16,14 @@
  * kirik gorunuyor. Yalpayi govdeye ayirmak bunu cozuyor.
  */
 
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 import { VEHICLE } from '@/core/vehicle'
-import { car } from '@/sim/state'
+import { approach } from '@/core/math'
+import { car, control } from '@/sim/state'
 
 const WHEEL_RADIUS = 0.34
 const WHEEL_WIDTH = 0.22
@@ -35,6 +37,33 @@ const CABIN_COLOR = '#151821'
 const GLASS_COLOR = '#f2a65a'
 const WHEEL_COLOR = '#0f1014'
 const UNDERBODY_COLOR = '#0b0c10'
+/**
+ * Arka lamba. Doygunluk kasitli olarak yuksek: AgX tone mapping parlak degerleri
+ * beyaza dogru cekiyor ve olculdu, daha soluk bir kirmizi frende somon pembesi
+ * olarak cikiyordu.
+ */
+const TAIL_COLOR = '#ff2a10'
+/** On lamba. Soguk beyaz degil, sarimsi: aksam isigina karsi beyaz mor duruyor. */
+const HEAD_COLOR = '#ffe3b0'
+
+/**
+ * Arka lamba parlakligi. Serbest surerken deger bloom esiginin (1.05) altinda,
+ * yani lamba yaniyor ama parlamiyor; frende esigin ustune cikiyor ve tek
+ * parlayan sey o oluyor.
+ *
+ * Kamera aracin arkasinda oldugu icin bu, girdinin gorunur tek geri bildirimi.
+ * Dikkat cekmek icin degil, fren yaptigini gormek icin var.
+ */
+const TAIL_IDLE = 0.4
+/**
+ * Fren parlakligi olcumle secildi. Iki bucuk denendi ve lamba somon pembesine
+ * dondu: AgX bir buçugun ustunde doygunlugu hizla kesiyor, yani "daha parlak"
+ * yapmak lambayi kirmizidan uzaklastiriyor. Bu deger dizin (knee) hemen
+ * altinda: kirmizi kirmizi kaliyor, bloom'a sadece kenardan giriyor.
+ */
+const TAIL_BRAKING = 1.25
+/** Lambanin frene yetismesi (1/s). Ampul de aniden yanmiyor. */
+const TAIL_RESPONSE = 14
 
 /** Sira zemin temasiyla ayni: on sol, on sag, arka sol, arka sag. */
 const WHEEL_POSITIONS: Array<[number, number, number]> = [
@@ -44,12 +73,40 @@ const WHEEL_POSITIONS: Array<[number, number, number]> = [
   [-HALF_WHEELBASE, 0, HALF_TRACK],
 ]
 
+/** Simetrik kucuk parcalari tek geometride birlestirir. */
+function pair(
+  size: [number, number, number],
+  x: number,
+  y: number,
+  z: number,
+): THREE.BufferGeometry {
+  const left = new THREE.BoxGeometry(...size)
+  left.translate(x, y, -z)
+  const right = new THREE.BoxGeometry(...size)
+  right.translate(x, y, z)
+
+  const merged = mergeGeometries([left, right])
+  if (!merged) throw new Error('simetrik parca birlestirilemedi')
+  return merged
+}
+
 export function Car(): React.ReactElement {
+  const geometries = useMemo(
+    () => ({
+      mirrors: pair([0.15, 0.1, 0.17], 0.66, 0.79, 0.95),
+      tailLights: pair([0.08, 0.16, 0.34], -2.03, 0.5, 0.66),
+      headLights: pair([0.08, 0.14, 0.4], 2.03, 0.48, 0.62),
+    }),
+    [],
+  )
+
   const chassis = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
   const wheelMounts = useRef<Array<THREE.Group | null>>([])
   const wheelMeshes = useRef<Array<THREE.Mesh | null>>([])
+  const tailMaterial = useRef<THREE.MeshStandardMaterial>(null)
   const spin = useRef(0)
+  const tailGlow = useRef(TAIL_IDLE)
 
   useFrame((_, delta) => {
     const root = chassis.current
@@ -79,6 +136,10 @@ export function Car(): React.ReactElement {
     for (const mesh of wheelMeshes.current) {
       if (mesh) mesh.rotation.y = spin.current
     }
+
+    const target = TAIL_IDLE + (TAIL_BRAKING - TAIL_IDLE) * control.brake
+    tailGlow.current = approach(tailGlow.current, target, TAIL_RESPONSE, delta)
+    if (tailMaterial.current) tailMaterial.current.emissiveIntensity = tailGlow.current
   })
 
   return (
@@ -105,6 +166,54 @@ export function Car(): React.ReactElement {
             metalness={0.1}
             emissive={GLASS_COLOR}
             emissiveIntensity={0.35}
+          />
+        </mesh>
+
+        {/* Arka cam: gunesin ters tarafinda, o yuzden koyu. Egimi silueti
+            station wagon'a benzetiyor ve arac profilden okunur hale geliyor. */}
+        <mesh position={[-1.22, 0.83, 0]} rotation={[0, 0, 0.72]}>
+          <boxGeometry args={[0.5, 0.06, 1.46]} />
+          <meshStandardMaterial color={CABIN_COLOR} roughness={0.3} metalness={0.25} flatShading />
+        </mesh>
+
+        {/* Tavan seridi: kabinden bir tik dar, yani tepede ince bir kenar
+            isigi olusuyor ve kabin tek blok gorunmuyor. Golge dusurmuyor;
+            kabinin golgesinin icinde kaliyor ve gecise cagri ekliyor. */}
+        <mesh position={[-0.24, 1.13, 0]}>
+          <boxGeometry args={[1.86, 0.06, 1.42]} />
+          <meshStandardMaterial color={BODY_COLOR} roughness={0.38} metalness={0.4} flatShading />
+        </mesh>
+
+        {/* Aynalar tek mesh: iki ayri mesh iki cizim cagrisi demek ve bu kadar
+            kucuk bir parca icin bunu odemek anlamsiz. Golge de dusurmuyorlar;
+            bu olcekte golgesi gorunmuyor, ama golge gecisinde cagri yiyor. */}
+        <mesh geometry={geometries.mirrors}>
+          <meshStandardMaterial color={CABIN_COLOR} roughness={0.6} flatShading />
+        </mesh>
+
+        {/* Arka lambalar. Kamera arkada oldugu icin surekli gorunur olan detay
+            bu; frende esigi asip parliyorlar. Ikisi tek mesh, tek malzeme: ayni
+            anda ve ayni parlaklikta yanmalari zaten dogru davranis. */}
+        <mesh geometry={geometries.tailLights}>
+          <meshStandardMaterial
+            ref={tailMaterial}
+            color={TAIL_COLOR}
+            emissive={TAIL_COLOR}
+            emissiveIntensity={TAIL_IDLE}
+            roughness={0.4}
+          />
+        </mesh>
+
+        {/* On lambalar. Arkadan bakan kamerada gorunmuyorlar, ama onden takip
+            eden sinematik cekimde aracin yuzunu onlar veriyor. Isik kaynagi
+            degil: gercek far bir spotlight ve golge haritasi demek, ve alcak
+            gunes altinda gorsel getirisi sifir. */}
+        <mesh geometry={geometries.headLights}>
+          <meshStandardMaterial
+            color={HEAD_COLOR}
+            emissive={HEAD_COLOR}
+            emissiveIntensity={0.85}
+            roughness={0.3}
           />
         </mesh>
 
