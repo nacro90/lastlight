@@ -280,8 +280,8 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 - [x] Erişilebilirlik ölçümü: alt bant kontrastı artık iddia değil, en kötü zemin testin kendisi tarafından konularak ölçülüyor
 - [ ] `web-design-guidelines` ve `impeccable` geçişi
 - [x] README: dört ilginç karar, ölçüm tablosu
-- [ ] İki aşamalı inceleme: spec-reviewer, sonra code-reviewer. Bulgular kullanıcıya sunulacak, düzeltme kararı kullanıcının.
-- [ ] Conventional commit'ler. **Push ve tag yok**, kullanıcı onayı bekleniyor.
+- [x] İki aşamalı inceleme: spec-reviewer (FAIL, 2 önemli davranış hatası + kanıt boşlukları), sonra code-reviewer (1 kritik + 5 önemli). Bulgular kullanıcıya sunuldu, kullanıcı "düzelteceksen düzelt" dedi, hepsi giderildi.
+- [x] Conventional commit'ler. Push ve deploy kullanıcı onayıyla yapıldı (herkese açık depo + Vercel üretim). Tag yok.
 
 ## Kabul kriterleri (kanıt gerekli)
 
