@@ -25,15 +25,15 @@ Sahne paleti: `#F2A65A` `#E4572E` `#6C4A8F` `#1B1033`
 Aşağıdaki on iki karar sorgulanarak alındı ve kapalı. Uygulama sırasında bunlara dönülmeyecek.
 
 1. **Gölge sisle saklanıyor.** Tek directional light, tek shadow map, araç çevresinde yaklaşık 120 m dar frustum. Sis mesafesi frustum kenarından daha yakın, böylece gölge kesme çizgisi hiç görünmüyor. Cascaded shadow map yazılmıyor. Bedeli: berrak uzak manzara yok, 300-400 m'de sıcak sis duvarı var. Bu bir kayıp değil, hem drama hem LOD bahanesi.
-2. **Dünya yol uzayında üretiliyor.** Her arazi vertex'i `(s, t)` ile tanımlı: `s` yol boyunca mesafe, `t` yandan sapma. Yükseklik `t` küçükken yol yüksekliğine, büyüdükçe gürültüye smoothstep ile karışıyor. Bu, "en yakın spline noktası" problemini tamamen ortadan kaldırıyor, LOD'u ve streaming'i bedavaya veriyor. Koridor iki yana 250 m. Açık dünya yok, özgürlük hissi yeterli.
-3. **Üretim ana thread'de, üç disiplinle.** Amortisman (kare başına en fazla bir dilim, dilim 25 m), havuzlama (sabit 40 mesh, halka tampon, vertex tamponu yerinde güncelleniyor, sıfır tahsis), saflık (üretim fonksiyonu three.js tanımıyor). Worker'a geçiş mekanik bir iş olarak kapıda bekliyor.
+2. **Dünya yol uzayında üretiliyor.** Her arazi vertex'i `(s, t)` ile tanımlı: `s` yol boyunca mesafe, `t` yandan sapma. Yükseklik `t` küçükken yol yüksekliğine, büyüdükçe gürültüye smoothstep ile karışıyor. Bu, "en yakın spline noktası" problemini tamamen ortadan kaldırıyor, LOD'u ve streaming'i bedavaya veriyor. Koridor iki yana 200 m (`corridorHalfWidth`). Açık dünya yok, özgürlük hissi yeterli.
+3. **Üretim ana thread'de, üç disiplinle.** Amortisman (kare başına en fazla bir dilim, dilim 25 m), havuzlama (sabit 48 mesh, halka tampon, vertex tamponu yerinde güncelleniyor, sıfır tahsis), saflık (üretim fonksiyonu three.js tanımıyor). Worker'a geçiş mekanik bir iş olarak kapıda bekliyor.
 4. **Sıfır doku, sıfır indirilen model.** Prosedürel geometri ve vertex renkleri. Gerekçe: ters ışıkta form görünür detay görünmez, asset boru hattı yarım gün yer, ve küçük bundle ilk boyanmayı kurtarır. Araç da prosedürel, ama ayrı bileşen arkasında (sonra GLB takılabilir).
 5. **Mobilde oyun değil sinematik.** Dokunmatik cihazda araç kendi sürüyor, kamera sabit (parmakla kamera döndürme denendi ve kesildi), kalite profili düşük. Auto-drive zaten yazıldığı için maliyeti sıfıra yakın.
 6. **Bütün ses prosedürel, tek byte inmiyor.** Web Audio ile rüzgar, lastik, motor, ortam pedi. Açılışta kapı yok: sinematik sessiz başlıyor, ilk etkileşimde ses iki saniyede süzülüyor. Ses ikonu sabit duruyor, nabız atmıyor.
 7. **Kamera üç parçalı.** Sinematik mod (dört çerçeveleme, 8-10 sn'de yumuşak kesme), devir teslim (tuşa dokununca 0.6 sn'de takip kamerasına), boşta kalma dönüşü (25 sn dokunulmazsa sinematik geri alıyor). Takip kamerası yaylı, ileri bakış kaymalı, hıza bağlı FOV. Kamera sarsıntısı yok, kokpit görüşü yok.
-8. **Kalite kademesi sinematik pencerede ölçülüp kilitleniyor.** İlk üç saniyede kare süresi ortalaması alınıyor, kademe seçiliyor, oyuncu kontrolü almadan sahne ona göre ayarlanmış oluyor. Oyun ortasında dinamik değişim yok (pop görünür olur). Seçim `localStorage`'da, ayarlardan elle geçersiz kılınabiliyor.
+8. **Kalite kademesi sinematik pencerede ölçülüp kilitleniyor.** İlk saniyelerde kare süresi ortancası alınıyor, kademe seçiliyor, oyuncu kontrolü almadan sahne ona göre ayarlanmış oluyor. Oyun ortasında dinamik değişim yok (pop görünür olur). Seçim `localStorage`'da, ayarlardan elle geçersiz kılınabiliyor.
 9. **Test: saf çekirdekte gerçek TDD, görsel katmanda duman testi.** Shader ve estetiğe test yazılmıyor; onun yerine Playwright duman testi ve ekran görüntüsüyle gözle doğrulama.
-10. **Arayüz gün batımıyla yarışmıyor.** Bütün arayüz alt bantta, gökyüzü ve ufuk temiz. Sürerken ekranda sadece hız var. Mesafe sayacı ayarlar panelinde. Sinematik moddayken HUD tamamen yok, sadece ses ikonu. Arayüzde renk yok: kırık beyaz, düşük opaklık, yumuşak gölge.
+10. **Arayüz gün batımıyla yarışmıyor.** Bütün arayüz alt bantta, gökyüzü ve ufuk temiz. Sürerken ekranda sadece hız var. Mesafe sayacı ayarlar panelinde. Sinematik moddayken hız göstergesi yok; ses ve ayarlar kümesi işaretçi niyetiyle gelip birkaç saniye sonra çekiliyor. (Karar başta "sadece ses ikonu" diyordu; dokunmatik cihazda deneyim hep sinematik modda kaldığı için ayarlara ulaşmanın başka yolu yok.) Arayüzde renk yok: kırık beyaz, düşük opaklık, yumuşak gölge.
 11. **İsim Lastlight.** Alt satır: "an endless evening drive". Açılışta bir kere görünüp soluyor.
 12. **Depo yerelde, README çekirdek kapsamda.** Conventional commit'ler, ama push/tag yok (kullanıcı onayına bağlı). Deploy Vercel statik build. README dört ilginç kararı anlatıyor, çünkü demo üç saniye etkiler, gerekçe ikna eder.
 
@@ -144,10 +144,10 @@ Dört katman, hepsi osilatör ve gürültü, sıfır dosya:
 
 | Katman | Yapı | Modülasyon |
 |---|---|---|
-| Rüzgar | pembe gürültü + alçak geçiren | kesim frekansı ve kazanç hıza bağlı |
+| Rüzgar | pembe gürültü + yüksek geçiren + alçak geçiren | kesim frekansı ve kazanç hıza bağlı |
 | Lastik | pembe gürültü + bant geçiren | hıza bağlı kazanç, zemine bağlı parlaklık |
 | Motor | 3 detune üçgen dalga + alçak geçiren | perde devire bağlı, gaz kazancı |
-| Ortam pedi | 3 sinüs beşli aralıkta | çok yavaş LFO, kazanç ve filtre |
+| Ortam pedi | 3 sinüs beşli aralıkta | çok yavaş LFO ile kazanç (filtre yok) |
 
 Kilit açma: `AudioContext` suspended başlıyor, ilk `pointerdown` veya `keydown` ile resume ediliyor, master kazanç 2 sn'de rampa ile yükseliyor.
 

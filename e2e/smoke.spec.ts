@@ -409,7 +409,6 @@ test.describe('erisilebilirlik', () => {
       { base64: shot, areas: setup.regions },
     )
     const background = probe.brightest
-    console.log('ZEMIN', JSON.stringify(probe))
 
     const channel = (value: number): number => {
       const s = value / 255
@@ -430,6 +429,96 @@ test.describe('erisilebilirlik', () => {
     expect(Math.max(...background)).toBeLessThan(160)
     for (const [name, color] of Object.entries(colors)) {
       expect(contrastFor(color), `${name} kontrasti`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  test('hiz gostergesi de en acik zeminde 4.5:1 tutuyor', async ({ page }) => {
+    // Hiz gostergesinin arkasinda koyulastirma yok ve olmasina gerek de yok:
+    // takip kamerasinin geometrisi geregi alt bandin sol tarafi her zaman aracin
+    // hemen arkasindaki asfalt. Garanti bu yapisal argumana dayaniyor, ama
+    // argumanin dogru kalmasini test korumuyordu; bu test onu koruyor.
+    await page.goto('/')
+    await waitUntilRunning(page)
+    await page.keyboard.down('ArrowUp')
+    await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'false')
+
+    const setup = await page.evaluate(() => {
+      const speed = document.querySelector('.speed')
+      const value = document.querySelector('.speed__value')
+      const unit = document.querySelector('.speed__unit')
+      if (!speed || !value || !unit) throw new Error('hiz gostergesi bulunamadi')
+      const rect = speed.getBoundingClientRect()
+      return {
+        // Rakamin hemen altindaki serit: alt bant dolgusunun icinde ve metin
+        // yok, yani olculen sey zemin.
+        region: { x: rect.x, y: rect.bottom + 3, width: rect.width, height: 9 },
+        colors: [getComputedStyle(value).color, getComputedStyle(unit).color],
+      }
+    })
+
+    const channel = (v: number): number => {
+      const s = v / 255
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+    }
+    const luminance = (pixel: number[]): number =>
+      0.2126 * channel(pixel[0]!) + 0.7152 * channel(pixel[1]!) + 0.0722 * channel(pixel[2]!)
+
+    // Birkac kare: arazi degisiyor, en acik hali ariyoruz.
+    let brightest = [0, 0, 0]
+    for (let frame = 0; frame < 4; frame++) {
+      const shot = (await page.screenshot({ type: 'png' })).toString('base64')
+      const found = await page.evaluate(
+        async ({ base64, region }: { base64: string; region: typeof setup.region }) => {
+          const image = new Image()
+          image.src = `data:image/png;base64,${base64}`
+          await image.decode()
+          const canvas = document.createElement('canvas')
+          canvas.width = image.width
+          canvas.height = image.height
+          const context = canvas.getContext('2d')
+          if (!context) throw new Error('2d baglami yok')
+          context.drawImage(image, 0, 0)
+
+          const scale = image.width / window.innerWidth
+          const data = context.getImageData(
+            Math.max(0, Math.floor(region.x * scale)),
+            Math.max(0, Math.floor(region.y * scale)),
+            Math.max(1, Math.floor(region.width * scale)),
+            Math.max(1, Math.floor(region.height * scale)),
+          ).data
+
+          let best = [0, 0, 0]
+          let bestSum = -1
+          for (let i = 0; i < data.length; i += 4) {
+            const sum = data[i]! + data[i + 1]! + data[i + 2]!
+            if (sum > bestSum) {
+              bestSum = sum
+              best = [data[i]!, data[i + 1]!, data[i + 2]!]
+            }
+          }
+          return best
+        },
+        { base64: shot, region: setup.region },
+      )
+      if (luminance(found) > luminance(brightest)) brightest = found
+      await page.waitForTimeout(1800)
+    }
+    await page.keyboard.up('ArrowUp')
+
+    for (const color of setup.colors) {
+      const numbers = color.match(/[\d.]+/g)
+      if (!numbers || numbers.length < 3) throw new Error(`renk ayristirilamadi: ${color}`)
+      const rgb = numbers.slice(0, 3).map(Number)
+      const alpha = numbers.length > 3 ? Number(numbers[3]) : 1
+      if (!Number.isFinite(alpha) || alpha <= 0 || alpha > 1) {
+        throw new Error(`opaklik araligin disinda: ${color}`)
+      }
+
+      const mixed = rgb.map((component, i) => alpha * component + (1 - alpha) * brightest[i]!)
+      const a = luminance(mixed)
+      const b = luminance(brightest)
+      const [high, low] = a > b ? [a, b] : [b, a]
+      expect((high + 0.05) / (low + 0.05), `${color} kontrasti`).toBeGreaterThanOrEqual(4.5)
     }
   })
 
@@ -750,6 +839,13 @@ test.describe('surus arayuzu', () => {
     await expect(page.locator('.cluster')).toHaveAttribute('data-hidden', 'true')
 
     const settings = page.getByRole('button', { name: 'ayarlar' })
+
+    // Gizliyken isaretleyiciye kapali: gorunmez bir dugmenin tiklanabilir
+    // kalmasi, telefonda sag alt koseye dokunan biri icin gorunurde hicbir seye
+    // dokunmadan ayarlarin acilmasi demek. Deneme tiklamasi eylem yapmiyor,
+    // sadece hedefin ulasilabilir olup olmadigini kontrol ediyor.
+    await expect(settings.click({ trial: true, timeout: 2500 })).rejects.toThrow()
+
     await settings.focus()
     await expect(settings).toBeFocused()
     await page.keyboard.press('Enter')

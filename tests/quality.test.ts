@@ -167,6 +167,26 @@ describe('kiyaslama', () => {
     expect(BENCHMARK.panicMs).toBeGreaterThan(BENCHMARK.mediumMs)
   })
 
+  it('normal karar acil degil, panik karari acil', () => {
+    // Ayrim uygulama tarafi icin: normal karar sinematik pencerede uygulanmayi
+    // bekleyebilir, panik karari beklemez cunku o makinede beklemek kotu
+    // deneyimi uzatmak demek.
+    const calm = feed(fullRun(7))
+    expect(calm.done).toBe(true)
+    expect(calm.urgent).toBe(false)
+
+    const panicking = createBenchmark()
+    for (let i = 0; i < BENCHMARK.warmupFrames; i++) panicking.add(8)
+    for (let i = 0; i < BENCHMARK.panicFrames; i++) panicking.add(400)
+    expect(panicking.urgent).toBe(true)
+  })
+
+  it('karar gelmeden acil olmuyor', () => {
+    const benchmark = createBenchmark()
+    benchmark.add(8)
+    expect(benchmark.urgent).toBe(false)
+  })
+
   it('felaket kare surelerinde beklemeden dusuge iniyor', () => {
     // Ust uste birkac kare ceyrek saniyeyi asiyorsa makinenin tam kaliteyi
     // kaldirmadigi belli; ornek toplamaya devam etmek sadece o makineyi daha

@@ -106,6 +106,12 @@ export function tierForFrameTime(medianMs: number): QualityTier {
 export interface Benchmark {
   add(frameMs: number): void
   readonly done: boolean
+  /**
+   * Karar panik yolundan mi geldi. Uygulama tarafi bu ayrimi kullaniyor: normal
+   * karar sinematik pencerede uygulanmayi bekleyebilir, panik karari beklemez.
+   * O makinede beklemek kotu deneyimi uzatmak demek.
+   */
+  readonly urgent: boolean
   /** Karar hazir degilse null. Hazir olduktan sonra hep ayni degeri veriyor. */
   tier(): QualityTier | null
 }
@@ -128,6 +134,7 @@ export function createBenchmark(): Benchmark {
   let elapsedMs = 0
   let panicRun = 0
   let decided: QualityTier | null = null
+  let panicked = false
 
   return {
     add(frameMs: number): void {
@@ -147,6 +154,7 @@ export function createBenchmark(): Benchmark {
       panicRun = frameMs >= BENCHMARK.panicMs ? panicRun + 1 : 0
       if (panicRun >= BENCHMARK.panicFrames) {
         decided = 'low'
+        panicked = true
         return
       }
 
@@ -162,6 +170,10 @@ export function createBenchmark(): Benchmark {
 
     get done(): boolean {
       return decided !== null
+    },
+
+    get urgent(): boolean {
+      return panicked
     },
 
     tier(): QualityTier | null {
