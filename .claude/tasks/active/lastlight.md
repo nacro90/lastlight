@@ -213,6 +213,7 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 ## Vakit kalırsa (bu sırayla)
 
 1. Fotoğraf modu (simülasyon duraklıyor, kamera serbest, HUD gizli, PNG indirme)
+1.5. ~~Ufuk bulut bantları~~: eklendi (`core/sky.cloudCoverage`, kubbe shader'ında aynı matematik)
 2. ~~Yol kenarı çeşitliliği~~: kesikli orta çizgi ve aralıklı yol tabelaları eklendi (uyarı üçgeni, hız levhası, kilometre taşı). Reflektörlü dikmeler denendi ve kaldırıldı: her 25 metrede tekrar eden nesne fazla teknik duruyordu.
 3. Hafif yağmur varyantı
 4. Gamepad desteği

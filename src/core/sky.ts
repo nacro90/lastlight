@@ -45,6 +45,54 @@ export const SKY = {
   haloFalloff: 5.5,
 } as const
 
+/**
+ * Ufuk bulut bantlari.
+ *
+ * Bulutlar gradyanin (skyColorAt) icinde degil ayri: sis rengi gradyandan
+ * besleniyor ve bulutlar oraya girse arac ilerledikce bant yon degistirdikce
+ * sis rengi titriyor. Bulut sadece kubbenin shader'inda goruluyor, sise hic
+ * dokunmuyor.
+ *
+ * Desen gurultu dokusu degil uc sinusun toplami. Sebep hem maliyet hem karakter:
+ * bantlar zaten yatay ve uzun, gercek bir gurultu alanina gerek yok, ve
+ * shader'da uc sinus neredeyse bedava.
+ */
+export const CLOUD = {
+  /** Bandin basladigi ve bittigi yukseklik (view.y). */
+  bottomElevation: 0.012,
+  topElevation: 0.24,
+  /** Bant sinirlarinin yumusama payi: sert kesme cizgisi olmasin. */
+  edgeSoftness: 0.075,
+
+  /**
+   * Serit frekanslari: yukseklikte birkac serit, azimutta yavas kirilma.
+   *
+   * Deger iki kez ayarlandi. Cok sik oldugunda (46 ve ustu) seritler fark
+   * edilmeyecek kadar inceydi; cok seyrek oldugunda (21) bandin yuksekligine
+   * bir tam dalga bile sigmiyor ve serit yerine duz bir yayvanlik cikiyor.
+   * Bant 0.23 yukseklik birimi genis, yani iki uc serit icin frekans altmis
+   * civari olmak zorunda.
+   */
+  elevationFrequencies: [62, 38, 95] as readonly [number, number, number],
+  azimuthFrequencies: [1.3, -2.1, 0.6] as readonly [number, number, number],
+  phases: [0, 1.7, 3.3] as readonly [number, number, number],
+  weights: [0.55, 0.3, 0.15] as readonly [number, number, number],
+
+  /** Desen bu esigin ustunde bulut sayiliyor; yuksek esik seyrek serit demek. */
+  threshold: 0.06,
+  /** Esigin etrafindaki yumusama: kenarlari tulumsu yapiyor. */
+  softness: 0.5,
+
+  /** Bulutun gokyuzunun uzerine ne kadar bastigi. */
+  opacity: 0.82,
+  /** Ters isikta bulut govdesi: tozlu, soguga kacan bir mor. */
+  body: [0.24, 0.14, 0.2] as readonly [number, number, number],
+  /** Gunese donuk kenar: sicak ama bloom esiginin altinda. */
+  rim: [1.02, 0.7, 0.42] as readonly [number, number, number],
+  /** Kenar isiginin gunese ne kadar yakinda basladigi. */
+  rimFalloff: 7,
+} as const
+
 export type Rgb = [number, number, number]
 export type Vec3 = readonly [number, number, number]
 
@@ -57,9 +105,48 @@ function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value
 }
 
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  if (edge1 === edge0) return x < edge0 ? 0 : 1
+  const t = clamp01((x - edge0) / (edge1 - edge0))
+  return t * t * (3 - 2 * t)
+}
+
+/**
+ * Verilen bakis yonundeki bulut kaplamasi, 0 ile 1.
+ *
+ * SkyDome'un fragment shader'iyla ayni matematik: burasi test edilebilir
+ * referans, shader onu birebir ayniliyor (bkz. core/dust'taki wrapCoordinate
+ * icin ayni desen).
+ */
+export function cloudCoverage(direction: Vec3): number {
+  const view = normalize(direction)
+  const elevation = view[1]
+
+  // Bant disinda hic hesap yapmiyoruz: kubbenin buyuk kismi bos gokyuzu.
+  const band =
+    smoothstep(CLOUD.bottomElevation, CLOUD.bottomElevation + CLOUD.edgeSoftness, elevation) *
+    (1 - smoothstep(CLOUD.topElevation - CLOUD.edgeSoftness, CLOUD.topElevation, elevation))
+  if (band <= 0) return 0
+
+  const azimuth = Math.atan2(view[2], view[0])
+
+  let pattern = 0
+  for (let i = 0; i < 3; i++) {
+    pattern +=
+      CLOUD.weights[i]! *
+      Math.sin(elevation * CLOUD.elevationFrequencies[i]! + azimuth * CLOUD.azimuthFrequencies[i]! + CLOUD.phases[i]!)
+  }
+
+  const coverage = smoothstep(CLOUD.threshold, CLOUD.threshold + CLOUD.softness, pattern)
+  return clamp01(coverage * band)
+}
+
 /**
  * Verilen bakis yonundeki gokyuzu rengi. SkyDome'un fragment shader'iyla ayni
  * matematik; ikisi ayni sabitleri kullaniyor.
+ *
+ * Bulutlar burada yok: bu fonksiyon ayni zamanda sis renginin kaynagi ve bulut
+ * bandi sise girse arac ilerledikce sis rengi titriyor.
  */
 export function skyColorAt(direction: Vec3, sunDirection: Vec3): Rgb {
   const view = normalize(direction)

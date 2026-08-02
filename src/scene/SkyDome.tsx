@@ -15,7 +15,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import { SKY } from '@/core/sky'
+import { CLOUD, SKY } from '@/core/sky'
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec3 vDirection;
@@ -49,6 +49,37 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uHaloStrength;
   uniform float uHaloFalloff;
 
+  uniform vec3 uCloudBody;
+  uniform vec3 uCloudRim;
+  uniform vec3 uCloudElevationFreq;
+  uniform vec3 uCloudAzimuthFreq;
+  uniform vec3 uCloudPhase;
+  uniform vec3 uCloudWeight;
+  uniform float uCloudBottom;
+  uniform float uCloudTop;
+  uniform float uCloudEdge;
+  uniform float uCloudThreshold;
+  uniform float uCloudSoftness;
+  uniform float uCloudOpacity;
+  uniform float uCloudRimFalloff;
+
+  /** core/sky.ts icindeki cloudCoverage ile birebir ayni matematik. */
+  float cloudCoverage(vec3 view) {
+    float elevation = view.y;
+    float band =
+      smoothstep(uCloudBottom, uCloudBottom + uCloudEdge, elevation) *
+      (1.0 - smoothstep(uCloudTop - uCloudEdge, uCloudTop, elevation));
+    if (band <= 0.0) return 0.0;
+
+    float azimuth = atan(view.z, view.x);
+    vec3 pattern = uCloudWeight * sin(
+      elevation * uCloudElevationFreq + azimuth * uCloudAzimuthFreq + uCloudPhase
+    );
+    float sum = pattern.x + pattern.y + pattern.z;
+
+    return clamp(smoothstep(uCloudThreshold, uCloudThreshold + uCloudSoftness, sum) * band, 0.0, 1.0);
+  }
+
   void main() {
     vec3 view = normalize(vDirection);
     vec3 sun = normalize(uSunDirection);
@@ -71,6 +102,16 @@ const FRAGMENT_SHADER = /* glsl */ `
       uSunIntensity * exp(-uDiskFalloff * angular) +
       uAureoleStrength * exp(-uAureoleFalloff * angular) +
       uHaloStrength * exp(-uHaloFalloff * angular);
+
+    // Bulut bandi gradyanin uzerine biniyor. Ters isikta govde koyu, sadece
+    // gunese donuk kenar isik aliyor; bu yuzden kenar rengi hizalanmayla
+    // geliyor ve bloom esiginin altinda kaliyor.
+    float coverage = cloudCoverage(view);
+    if (coverage > 0.0) {
+      float rim = exp(-uCloudRimFalloff * (1.0 - max(alignment, 0.0)));
+      vec3 cloud = mix(uCloudBody, uCloudRim, rim);
+      color = mix(color, cloud, coverage * uCloudOpacity);
+    }
 
     gl_FragColor = vec4(color + uSunColor * glow, 1.0);
   }
@@ -113,6 +154,20 @@ export function SkyDome({ sunDirection }: SkyDomeProps): React.ReactElement {
           uAureoleFalloff: { value: SKY.aureoleFalloff },
           uHaloStrength: { value: SKY.haloStrength },
           uHaloFalloff: { value: SKY.haloFalloff },
+
+          uCloudBody: { value: new THREE.Vector3(...CLOUD.body) },
+          uCloudRim: { value: new THREE.Vector3(...CLOUD.rim) },
+          uCloudElevationFreq: { value: new THREE.Vector3(...CLOUD.elevationFrequencies) },
+          uCloudAzimuthFreq: { value: new THREE.Vector3(...CLOUD.azimuthFrequencies) },
+          uCloudPhase: { value: new THREE.Vector3(...CLOUD.phases) },
+          uCloudWeight: { value: new THREE.Vector3(...CLOUD.weights) },
+          uCloudBottom: { value: CLOUD.bottomElevation },
+          uCloudTop: { value: CLOUD.topElevation },
+          uCloudEdge: { value: CLOUD.edgeSoftness },
+          uCloudThreshold: { value: CLOUD.threshold },
+          uCloudSoftness: { value: CLOUD.softness },
+          uCloudOpacity: { value: CLOUD.opacity },
+          uCloudRimFalloff: { value: CLOUD.rimFalloff },
         },
       }),
     [sunDirection],
