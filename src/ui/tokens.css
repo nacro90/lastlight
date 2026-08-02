@@ -163,6 +163,17 @@ canvas {
   z-index: 1;
 }
 
+/* Telefonda kume metni (dokunmatik ipucu) neredeyse butun genisligi kapliyor ve
+   maskenin erimis kenarina dusuyor. O ekranlarda koyulastirma tam genislige
+   cikiyor: alt bant zaten tamamen arayuz. */
+@media (max-width: 520px) {
+  .shade--right {
+    width: 100%;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 /* Butun arayuz alt bantta yasiyor. Gokyuzu ve ufuk hatti temiz kaliyor,
    cunku bakilan yer orasi. */
 .hud {
