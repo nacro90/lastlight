@@ -40,6 +40,17 @@ const CONTROL_LINGER_MS = 3500
 /** Klavye ipucu surus baslangicindan bu kadar sonra cekiliyor. */
 const HINT_DURATION_MS = 7000
 
+/**
+ * Mesafe bicimi ziyaretcinin yerelinden geliyor, sabit bir bicimden degil:
+ * Turkce yerelde ondalik ayirici virgul, Ingilizce yerelde nokta. Bicimlendirici
+ * bir kez kuruluyor, cunku her cagrida kurmak olcu birimi tablolarini yeniden
+ * yuklemek demek.
+ */
+const DISTANCE_FORMAT = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
 const TIER_LABELS: Record<QualityTier, string> = {
   low: 'düşük',
   medium: 'orta',
@@ -190,53 +201,64 @@ function Settings({
 
   return (
     <div className="settings" role="group" aria-label="Ayarlar">
-      <div className="settings__row">
-        <span className="settings__label">Kalite</span>
-        <span className="settings__value">
-          {CHOICES.map((option, index) => (
-            <button
-              key={option}
-              ref={index === 0 ? first : undefined}
-              type="button"
-              className="chip"
-              aria-pressed={choice === option}
-              onClick={() => setQualityChoice(option)}
-            >
-              {choiceLabel(option)}
-            </button>
-          ))}
-        </span>
-      </div>
-
-      {choice === 'auto' ? (
+      {/* Etiket ve deger ciftleri: tanim listesi bunun tam karsiligi ve ekran
+          okuyucu ciftleri birlikte okuyor. ARIA'dan once anlamli HTML. */}
+      <dl className="settings__list">
         <div className="settings__row">
-          <span className="settings__label">Ölçülen</span>
-          <span className="settings__value settings__value--plain">
-            {measured ? TIER_LABELS[measured] : touchOnly ? 'dokunmatik, düşük' : 'ölçülüyor'}
-          </span>
+          <dt className="settings__label">Kalite</dt>
+          <dd className="settings__value">
+            {CHOICES.map((option, index) => (
+              <button
+                key={option}
+                ref={index === 0 ? first : undefined}
+                type="button"
+                className="chip"
+                aria-pressed={choice === option}
+                onClick={() => setQualityChoice(option)}
+              >
+                {choiceLabel(option)}
+              </button>
+            ))}
+          </dd>
         </div>
-      ) : null}
 
-      <div className="settings__row">
-        <span className="settings__label">Mesafe</span>
-        <span className="settings__value settings__value--plain settings__value--num">
-          {distanceKm.toFixed(1)} km
-        </span>
-      </div>
+        {choice === 'auto' ? (
+          <div className="settings__row">
+            <dt className="settings__label">Ölçülen</dt>
+            {/* Deger olcum bitince kendiliginden degisiyor: ekran okuyucunun
+                bunu duyurmasi icin canli bolge. */}
+            <dd className="settings__value settings__value--plain" aria-live="polite">
+              {measured ? TIER_LABELS[measured] : touchOnly ? 'dokunmatik, düşük' : 'ölçülüyor…'}
+            </dd>
+          </div>
+        ) : null}
 
-      <div className="settings__row">
-        <span className="settings__label">Tohum</span>
-        <span className="settings__value settings__value--plain">{SEED_NAME}</span>
-      </div>
+        <div className="settings__row">
+          <dt className="settings__label">Mesafe</dt>
+          <dd className="settings__value settings__value--plain settings__value--num">
+            {/* Bolunmez bosluk: sayi ile birim asla ayri satira dusmuyor. */}
+            {`${DISTANCE_FORMAT.format(distanceKm)}\u00A0km`}
+          </dd>
+        </div>
 
-      <div className="settings__row">
-        <span className="settings__label">Kapat</span>
-        <span className="settings__value">
-          <button type="button" className="chip" onClick={onClose}>
-            esc
-          </button>
-        </span>
-      </div>
+        <div className="settings__row">
+          <dt className="settings__label">Tohum</dt>
+          {/* Tohum bir tanimlayici: otomatik ceviri onu bozmasin. Uzun deger
+              panel tasirmak yerine kirpiliyor (bkz. tokens.css). */}
+          <dd className="settings__value settings__value--plain" translate="no">
+            {SEED_NAME}
+          </dd>
+        </div>
+
+        <div className="settings__row">
+          <dt className="settings__label">Kapat</dt>
+          <dd className="settings__value">
+            <button type="button" className="chip" onClick={onClose}>
+              esc
+            </button>
+          </dd>
+        </div>
+      </dl>
     </div>
   )
 }
@@ -275,7 +297,7 @@ export function Hud(): React.ReactElement {
   return (
     <>
       <div className="titlecard" data-hidden={!titleVisible || driving} aria-hidden="true">
-        <h1 className="titlecard__name" lang="en">
+        <h1 className="titlecard__name" lang="en" translate="no">
           Lastlight
         </h1>
         <p className="titlecard__tagline" lang="en">
@@ -284,6 +306,11 @@ export function Hud(): React.ReactElement {
       </div>
 
       <div className="hud" data-hidden={!driving}>
+        {/* Koyulastirma gercek bir oge ve kapsayicinin ilk cocugu: boyama
+            sirasi DOM sirasi, yani sozde ogedeki negatif z-index inceliklerine
+            bagli degil. */}
+        <div className="shade shade--left" aria-hidden="true" />
+
         <div className="speed">
           <span className="speed__value">{snapshot.speedKmh}</span>
           <span className="speed__unit">km/h</span>
@@ -293,11 +320,14 @@ export function Hud(): React.ReactElement {
             agacindan cikarmiyor, yani gorunmeyen bir ipucu okunmaya devam
             ediyordu. */}
         <span className="hint hint--drive" data-hidden={!hintVisible} aria-hidden={!hintVisible}>
-          W A S D
+          {/* Bolunmez bosluk: dort harf hicbir genislikte alt satira bolunmuyor. */}
+          {'W\u00A0A\u00A0S\u00A0D'}
         </span>
       </div>
 
       <div className="cluster" data-hidden={!controlsVisible}>
+        <div className="shade shade--right" aria-hidden="true" />
+
         {settingsOpen ? <Settings distanceKm={snapshot.distanceKm} onClose={close} /> : null}
 
         <div className="controls">

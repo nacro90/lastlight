@@ -279,7 +279,8 @@ Başka biyom, hava durumu, gün döngüsü, trafik, diğer araçlar, çarpışma
 - [x] Playwright duman testi
 - [x] Profilleme (CPU 4x, `pnpm perf`): kıyaslama kare sayısına bağlıydı, yavaş makinede karar 78 sn sürüyordu; süre sınırı ve panik yolu eklendi, 10.4 sn'ye indi
 - [x] Erişilebilirlik ölçümü: alt bant kontrastı artık iddia değil, en kötü zemin testin kendisi tarafından konularak ölçülüyor
-- [ ] `web-design-guidelines` ve `impeccable` geçişi
+- [x] `web-design-guidelines` geçişi: güvenli alan payları, kullanıcı girdisi taşması, `color-scheme`, dokunmatik dokunma gecikmesi, `Intl` sayı biçimi, `aria-live`, tanım listesi semantiği, `translate="no"`
+- [ ] `impeccable` geçişi
 - [x] README: dört ilginç karar, ölçüm tablosu
 - [x] İki aşamalı inceleme: spec-reviewer (FAIL, 2 önemli davranış hatası + kanıt boşlukları), sonra code-reviewer (1 kritik + 5 önemli). Bulgular kullanıcıya sunuldu, kullanıcı "düzelteceksen düzelt" dedi, hepsi giderildi.
 - [x] Conventional commit'ler. Push ve deploy kullanıcı onayıyla yapıldı (herkese açık depo + Vercel üretim). Tag yok.

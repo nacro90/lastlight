@@ -273,6 +273,7 @@ test.describe('erisilebilirlik', () => {
     // kotu durum burasi.
     await page.getByRole('button', { name: 'ayarlar' }).click()
     await expect(page.getByRole('group', { name: 'Ayarlar' })).toBeVisible()
+    await waitForOpaque(page, '.cluster')
 
     const setup = await page.evaluate(() => {
       const rectOf = (selector: string): DOMRect => {
@@ -338,18 +339,7 @@ test.describe('erisilebilirlik', () => {
     // Metnin gercekten yariginan degil parlak oldugunu da dogruluyoruz.
     for (const color of Object.values(colors)) expect(color.alpha).toBeGreaterThan(0.5)
 
-    await page.evaluate(() => {
-      const root = document.getElementById('root')
-      const hud = document.querySelector('.hud')
-      if (!root || !hud) throw new Error('arayuz bulunamadi')
-
-      const worst = document.createElement('div')
-      worst.style.cssText =
-        'position:fixed;inset:auto 0 0 0;height:320px;background:#ffffff;pointer-events:none'
-      // Canvas ile arayuz arasina giriyor: opak canvas'in ustunde ama kumenin
-      // altinda. Body'nin basina eklemek ise yaramiyor, canvas onu kapatiyor.
-      root.insertBefore(worst, hud)
-    })
+    await whitenBackground(page)
 
     // Kume tam opak olmadan olcmek yaridan saydam bir koyulastirma olcmek olur.
     await page.waitForFunction(() => {
@@ -432,21 +422,28 @@ test.describe('erisilebilirlik', () => {
     }
   })
 
-  test('hiz gostergesi de en acik zeminde 4.5:1 tutuyor', async ({ page }) => {
-    // Hiz gostergesinin arkasinda koyulastirma yok ve olmasina gerek de yok:
-    // takip kamerasinin geometrisi geregi alt bandin sol tarafi her zaman aracin
-    // hemen arkasindaki asfalt. Garanti bu yapisal argumana dayaniyor, ama
-    // argumanin dogru kalmasini test korumuyordu; bu test onu koruyor.
+  test('hiz gostergesi de en kotu zeminde 4.5:1 tutuyor', async ({ page }) => {
+    // Bu test ilk halinde sahnenin kendi zeminini olcuyordu ve kendi iddiami
+    // curuttu: "takip kamerasinin geometrisi alt bandin sol tarafini her zaman
+    // koyu tutar" argumani yirmi dort saniyelik bir olcumde dogru gorunuyordu
+    // (9.6:1) ama daha uzun kosuldugunda bir karede 2.88:1 cikti. Arac bankete
+    // yaklastiginda veya yol kivrildiginda gunes alan arazi o kosede goruluyor.
+    //
+    // Cozum hiz gostergesine de kendi koyulastirmasini vermek oldu, ve olcum
+    // artik sahneye bagli degil: en kotu zemini test koyuyor.
     await page.goto('/')
+    await whitenBackground(page)
     await waitUntilRunning(page)
     await page.keyboard.down('ArrowUp')
     await expect(page.locator('.hud')).toHaveAttribute('data-hidden', 'false')
+    await waitForOpaque(page, '.hud')
 
     const setup = await page.evaluate(() => {
       const speed = document.querySelector('.speed')
       const value = document.querySelector('.speed__value')
       const unit = document.querySelector('.speed__unit')
       if (!speed || !value || !unit) throw new Error('hiz gostergesi bulunamadi')
+
       const rect = speed.getBoundingClientRect()
       return {
         // Rakamin hemen altindaki serit: alt bant dolgusunun icinde ve metin
@@ -456,54 +453,55 @@ test.describe('erisilebilirlik', () => {
       }
     })
 
-    const channel = (v: number): number => {
-      const s = v / 255
+    await page.keyboard.up('ArrowUp')
+
+    const shot = (await page.screenshot({ type: 'png' })).toString('base64')
+
+    const probe = await page.evaluate(
+      async ({ base64, region }: { base64: string; region: typeof setup.region }) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${base64}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')
+        if (!context) throw new Error('2d baglami yok')
+        context.drawImage(image, 0, 0)
+
+        const scale = image.width / window.innerWidth
+        const data = context.getImageData(
+          Math.max(0, Math.floor(region.x * scale)),
+          Math.max(0, Math.floor(region.y * scale)),
+          Math.max(1, Math.floor(region.width * scale)),
+          Math.max(1, Math.floor(region.height * scale)),
+        ).data
+
+        let brightest = [0, 0, 0]
+        let brightestSum = -1
+        for (let i = 0; i < data.length; i += 4) {
+          const sum = data[i]! + data[i + 1]! + data[i + 2]!
+          if (sum > brightestSum) {
+            brightestSum = sum
+            brightest = [data[i]!, data[i + 1]!, data[i + 2]!]
+          }
+        }
+        return { brightest }
+      },
+      { base64: shot, region: setup.region },
+    )
+
+    const channel = (value: number): number => {
+      const s = value / 255
       return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
     }
     const luminance = (pixel: number[]): number =>
       0.2126 * channel(pixel[0]!) + 0.7152 * channel(pixel[1]!) + 0.0722 * channel(pixel[2]!)
 
-    // Birkac kare: arazi degisiyor, en acik hali ariyoruz.
-    let brightest = [0, 0, 0]
-    for (let frame = 0; frame < 4; frame++) {
-      const shot = (await page.screenshot({ type: 'png' })).toString('base64')
-      const found = await page.evaluate(
-        async ({ base64, region }: { base64: string; region: typeof setup.region }) => {
-          const image = new Image()
-          image.src = `data:image/png;base64,${base64}`
-          await image.decode()
-          const canvas = document.createElement('canvas')
-          canvas.width = image.width
-          canvas.height = image.height
-          const context = canvas.getContext('2d')
-          if (!context) throw new Error('2d baglami yok')
-          context.drawImage(image, 0, 0)
+    const background = probe.brightest
 
-          const scale = image.width / window.innerWidth
-          const data = context.getImageData(
-            Math.max(0, Math.floor(region.x * scale)),
-            Math.max(0, Math.floor(region.y * scale)),
-            Math.max(1, Math.floor(region.width * scale)),
-            Math.max(1, Math.floor(region.height * scale)),
-          ).data
-
-          let best = [0, 0, 0]
-          let bestSum = -1
-          for (let i = 0; i < data.length; i += 4) {
-            const sum = data[i]! + data[i + 1]! + data[i + 2]!
-            if (sum > bestSum) {
-              bestSum = sum
-              best = [data[i]!, data[i + 1]!, data[i + 2]!]
-            }
-          }
-          return best
-        },
-        { base64: shot, region: setup.region },
-      )
-      if (luminance(found) > luminance(brightest)) brightest = found
-      await page.waitForTimeout(1800)
-    }
-    await page.keyboard.up('ArrowUp')
+    // Koyulastirma beyazi gercekten kirmis olmali; kirmadiysa olcum anlamsiz.
+    expect(Math.max(...background)).toBeLessThan(160)
 
     for (const color of setup.colors) {
       const numbers = color.match(/[\d.]+/g)
@@ -514,9 +512,9 @@ test.describe('erisilebilirlik', () => {
         throw new Error(`opaklik araligin disinda: ${color}`)
       }
 
-      const mixed = rgb.map((component, i) => alpha * component + (1 - alpha) * brightest[i]!)
+      const mixed = rgb.map((component, i) => alpha * component + (1 - alpha) * background[i]!)
       const a = luminance(mixed)
-      const b = luminance(brightest)
+      const b = luminance(background)
       const [high, low] = a > b ? [a, b] : [b, a]
       expect((high + 0.05) / (low + 0.05), `${color} kontrasti`).toBeGreaterThanOrEqual(4.5)
     }
@@ -663,6 +661,44 @@ async function readQuality(page: Page): Promise<QualityInfo> {
       .__lastlight
     if (!debug) throw new Error('__lastlight yok')
     return debug.quality()
+  })
+}
+
+/**
+ * En kotu zemini kurar: sahne gizlenip sayfa beyaza cevriliyor. Kontrast
+ * olcumleri bunun uzerinde yapiliyor, cunku beyaz sahnenin uretebileceginden
+ * acik ve boylece sonuc o anki kareye bagli kalmiyor.
+ *
+ * Sayfa acilir acilmaz cagriliyor ve sebebi olculdu. Once olcumun ortasinda
+ * uygulaniyordu: arayuzun altina beyaz bir oge eklemek, sonra canvas'i
+ * gizlemek. Ikisi de kararsiz cikti, cunku yazilim rasterizer'da bir kare bir
+ * saniyeyi asiyor ve stil degisiminden sonra alinan goruntude zemin beyaz
+ * gorunuyor ama koyulastirma katmani henuz yeniden boyanmamis oluyordu. Ayni
+ * olcum bir kosuda 8.9, digerinde 3.99 veriyordu. Basta uygulandiginda ortada
+ * katman degisimi olmuyor.
+ */
+/**
+ * Ogenin opaklik gecisi bitene kadar bekler.
+ *
+ * data-hidden aninda degisiyor ama gorunurluk 900 ms'lik bir gecisle geliyor;
+ * yazilim rasterizer'da bir kare bir saniyeyi astigi icin goruntu tam o araliga
+ * dusuyor ve olcum yariginan (veya hic olmayan) bir katmani olcuyordu.
+ */
+async function waitForOpaque(page: Page, selector: string): Promise<void> {
+  await page.waitForFunction(
+    (target: string) => {
+      const element = document.querySelector(target)
+      return !!element && getComputedStyle(element).opacity === '1'
+    },
+    selector,
+    { timeout: 20_000 },
+  )
+}
+
+async function whitenBackground(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content: `canvas { visibility: hidden !important; }
+      html, body, #root { background: #ffffff !important; }`,
   })
 }
 

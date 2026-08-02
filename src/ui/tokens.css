@@ -6,7 +6,7 @@
  *
  * Instrument Serif sadece acilis kartinda, tam olarak bir kez. Gerekcesi
  * editoryal degil sinematik: bu bir film baslik karti. O yuzden subset sadece
- * "Lastlight" harflerini tasiyor, uc buçuk kilobyte.
+ * "Lastlight" harflerini tasiyor, uc bucuk kilobyte.
  *
  * Archivo butun arayuz metni ve rakamlar. Secim sebebi dogrudan konunun
  * dunyasindan: Archivo Amerikan tabela gotiklerinden turuyor, yani yolun kendi
@@ -42,7 +42,7 @@
   /* Metin opakliklari olcumle secildi. Alt bantta en acik sahne degeri
      (176,158,137) olculdu ve buna karsi tam opak kirik beyaz bile 2.27:1
      veriyor, yani opaklikla 4.5:1 tutmak imkansiz. Cozum metni parlatmak degil,
-     metnin altina koyulastirma koymak (bkz. .cluster::before); bu iki deger o
+     metnin altina koyulastirma koymak (bkz. .shade); bu iki deger o
      koyulastirmanin uzerinde 4.5:1'i geciyor ve e2e testi bunu olcuyor. Hiz
      gostergesi koyulastirma olmadan da tutuyor, olculdu. */
   --hud-strong: rgba(245, 239, 230, 0.92);
@@ -54,12 +54,21 @@
   --font-ui: 'Archivo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Instrument Serif', ui-serif, Georgia, 'Times New Roman', serif;
 
-  --bottom-band: clamp(18px, 3.2vh, 34px);
-  --side-gutter: clamp(18px, 3.2vw, 40px);
+  /* Alt bant ve yan bosluk. env() paylari zorunlu: viewport-fit=cover ile
+     arayuz cihazin guvensiz alanina (centik, ev gostergesi) giriyor ve iPhone'da
+     hiz rakami ev gostergesinin altinda kaliyordu. */
+  --bottom-band: calc(clamp(18px, 3.2vh, 34px) + env(safe-area-inset-bottom, 0px));
+  --side-gutter-left: calc(clamp(18px, 3.2vw, 40px) + env(safe-area-inset-left, 0px));
+  --side-gutter: calc(clamp(18px, 3.2vw, 40px) + env(safe-area-inset-right, 0px));
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  /* Kaydirma cubugu ve yerlesik kontroller koyu temaya uysun. */
+  color-scheme: dark;
 }
 
 html,
@@ -83,6 +92,77 @@ canvas {
   touch-action: none;
 }
 
+/* Metnin altindaki yumusak koyulastirma.
+ *
+ * Hem hiz gostergesinin hem kontrol kumesinin buna ihtiyaci var ve bu olcumle
+ * geldi. Hiz icin once "takip kamerasinin geometrisi geregi alt bandin sol
+ * tarafi her zaman koyu asfalt" diye dusunuldu; yirmi dort saniyelik bir olcum
+ * de bunu destekledi (9.6:1). Sonra ayni olcum daha uzun kosuldu ve bir karede
+ * 2.88:1 cikti: arac bankete yaklastiginda veya yol kivrildiginda gunes alan
+ * arazi o kosede goruluyor. Yani arguman ornekleme sansina dayaniyordu.
+ *
+ * Sozde oge (::before, z-index -1) olarak denendi ve kirilgan cikti: negatif
+ * z-index yigin baglami kurallarina bagli ve olcumde ayni piksel bir kosuda
+ * koyu bir kosuda beyaz geldi. Gercek bir oge, kapsayicinin ilk cocugu olarak,
+ * DOM sirasina gore kardeslerinin altina boyaniyor; hicbir incelik kalmiyor.
+ *
+ * Olculeri icerikten degil ekrandan aliyor. Icerige bagli oldugunda hiz 99'dan
+ * 100'e ciktiginda kutu genisliyor, radyal gradyanin merkezi ve yaricapi
+ * onunla kayiyor: ayni piksel bir karede koyu bir karede acik oluyor ve golge
+ * rakam degistikce nabiz gibi atiyor.
+ *
+ * Degerler olcumle secildi: metnin durdugu yerde herhangi bir zemine, en uctaki
+ * beyaza karsi bile 4.5:1 tutuyor (bkz. e2e/smoke.spec.ts). */
+.shade {
+  position: absolute;
+  bottom: 0;
+  height: min(30vh, 200px);
+  /* Konumlanmis oge akis icindeki metinden sonra boyaniyor, yani z-index
+     verilmezse golge metnin ustune biniyor ve rakam okunmuyor. Icerik
+     kardesleri de konumlaniyor ve bir ustte duruyor. */
+  z-index: 0;
+  pointer-events: none;
+  /* Dusey dogrusal gradyan, platolu. Radyal (elips) denendi ve olcumle
+     tutmadi: kenar bolgesinde alfa hesaplananin cok altina dusuyordu ve
+     metnin sag ucunda garanti kayboluyordu. Dogrusal gradyanda metnin
+     durdugu yukseklikte alfa sabit, yani hesap tek satir. */
+  /* Plato degerleri olcumle secildi ve bir kez guclendirildi: 0.88 ile marj
+     4.7'ye kadar iniyordu ve olcum kareler arasinda oynadigi icin test
+     kararsizlasiyordu. Bu degerlerde marj iki katindan fazla. */
+  background: linear-gradient(
+    to top,
+    rgba(12, 8, 22, 0.92) 0%,
+    rgba(12, 8, 22, 0.9) 52%,
+    rgba(12, 8, 22, 0) 100%
+  );
+}
+
+/* Yan kenar maskeyle eriyor: sert bir dikey kenar arayuzu plaka gibi
+   gosteriyordu. */
+.shade--left {
+  left: 0;
+  width: min(52vw, 420px);
+  -webkit-mask-image: linear-gradient(to right, #000 52%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 52%, transparent 100%);
+}
+
+.shade--right {
+  right: 0;
+  width: min(58vw, 520px);
+  height: min(46vh, 330px);
+  -webkit-mask-image: linear-gradient(to left, #000 58%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 58%, transparent 100%);
+}
+
+/* Icerik golgenin ustunde: ikisi de konumlanmis, sira DOM sirasi. */
+.speed,
+.hint--drive,
+.controls,
+.settings {
+  position: relative;
+  z-index: 1;
+}
+
 /* Butun arayuz alt bantta yasiyor. Gokyuzu ve ufuk hatti temiz kaliyor,
    cunku bakilan yer orasi. */
 .hud {
@@ -91,7 +171,7 @@ canvas {
   display: flex;
   align-items: baseline;
   gap: 1.4rem;
-  padding: 0 var(--side-gutter) var(--bottom-band);
+  padding: 0 var(--side-gutter) var(--bottom-band) var(--side-gutter-left);
   pointer-events: none;
   user-select: none;
 }
@@ -133,27 +213,6 @@ canvas {
   pointer-events: none;
   user-select: none;
   transition: opacity 700ms ease;
-  /* Kendi yigin baglamini kuruyor: koyulastirma (::before, z-index -1) boylece
-     kumenin icinde kaliyor. Yigin baglami olmadan negatif z-index onu kok
-     baglamina tasiyor ve canvas'in arkasina dusuyor, yani gorunmez oluyor. */
-  isolation: isolate;
-}
-
-.cluster::before {
-  content: '';
-  position: absolute;
-  /* Kutu gradyanin sonmesi icin gereginden buyuk. Once daha kucuktu ve
-     gradyan seffaflasmadan kutu bitiyordu, yani ekranda duz bir kenar
-     goruluyordu. */
-  inset: -6rem -1.1rem -0.7rem -11rem;
-  background: radial-gradient(
-    58% 130% at 92% 100%,
-    rgba(12, 8, 22, 0.86) 0%,
-    rgba(12, 8, 22, 0.79) 30%,
-    rgba(12, 8, 22, 0) 100%
-  );
-  pointer-events: none;
-  z-index: -1;
 }
 
 .cluster[data-hidden='true'] {
@@ -196,8 +255,7 @@ canvas {
  * degil ve ikisi carpistiginda garanti kazaniyor. Panel sadece acikken var,
  * yani surus ve sinematik cerceve etkilenmiyor. */
 .settings {
-  display: grid;
-  gap: 0.55rem;
+  display: block;
   min-width: min(19rem, 76vw);
   padding: 0.9rem 1rem;
   background: linear-gradient(to top, rgba(12, 8, 22, 0.84), rgba(12, 8, 22, 0.76));
@@ -206,11 +264,20 @@ canvas {
   text-shadow: var(--hud-shadow);
 }
 
+.settings__list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
 .settings__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1.2rem;
+  /* Tasmayi mumkun kilmak icin: flex cocuklarinin varsayilan min-width'i
+     icerik genisligi ve bu kirpmayi engelliyor. */
+  min-width: 0;
 }
 
 .settings__label {
@@ -230,6 +297,12 @@ canvas {
 .settings__value--plain {
   font-size: 0.78rem;
   color: var(--hud-strong);
+  /* Tohum adi URL'den geliyor, yani uzunlugu kullanicinin elinde: ?seed= ile
+     uzun bir metin verildiginde panel tasmak yerine kirpiliyor. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings__value--num {
@@ -242,6 +315,8 @@ canvas {
    yaristirirdi. */
 .chip {
   appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   margin: 0;
   padding: 0 0 2px;
   border: 0;
@@ -331,6 +406,9 @@ canvas {
    halde ustu cizili; durumu opaklikla anlatmak yetersiz kaliyor. */
 .toggle {
   appearance: none;
+  /* Cift dokunma yakinlastirma gecikmesini kaldiriyor. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   margin: 0;
   padding: 0;
   border: 0;
@@ -384,6 +462,7 @@ canvas {
 
 .titlecard__tagline {
   margin: 0;
+  text-wrap: balance;
   font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.24em;
